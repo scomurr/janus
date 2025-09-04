@@ -1,0 +1,201 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trade Schema",
+  "description": "Schema for trade data structure",
+  "type": "object",
+  "properties": {
+    "tradeId": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "action": {
+      "type": "string",
+      "enum": ["BUY", "SELL", "HOLD"]
+    },
+    "ticker": {
+      "type": "string",
+      "pattern": "^[A-Z]{1,5}$"
+    },
+    "shares": {
+      "type": "number",
+      "minimum": 0
+    },
+    "price": {
+      "type": "number",
+      "minimum": 0
+    },
+    "stopLoss": {
+      "type": "number",
+      "minimum": 0
+    },
+    "orderType": {
+      "type": "string",
+      "enum": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT"]
+    },
+    "executionMode": {
+      "type": "string",
+      "enum": ["paper", "live"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "EXECUTED", "REJECTED", "CANCELLED", "PARTIALLY_FILLED"]
+    },
+    "executionDetails": {
+      "type": "object",
+      "properties": {
+        "executionId": {
+          "type": "string"
+        },
+        "executionTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "executionPrice": {
+          "type": "number"
+        },
+        "executedShares": {
+          "type": "number"
+        },
+        "fees": {
+          "type": "number",
+          "minimum": 0
+        },
+        "broker": {
+          "type": "string"
+        }
+      }
+    },
+    "reasoning": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["daily_analysis", "weekly_research", "stop_loss", "manual", "rebalancing"]
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "catalysts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "riskAssessment": {
+          "type": "string"
+        }
+      }
+    },
+    "financialImpact": {
+      "type": "object",
+      "properties": {
+        "costBasis": {
+          "type": "number"
+        },
+        "proceeds": {
+          "type": "number"
+        },
+        "pnl": {
+          "type": "number"
+        },
+        "pnlPercent": {
+          "type": "number"
+        },
+        "fees": {
+          "type": "number",
+          "minimum": 0
+        },
+        "netCashImpact": {
+          "type": "number"
+        }
+      }
+    },
+    "riskManagement": {
+      "type": "object",
+      "properties": {
+        "positionSize": {
+          "type": "number",
+          "minimum": 0
+        },
+        "positionWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "riskLevel": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH"]
+        },
+        "stopLossDistance": {
+          "type": "number"
+        },
+        "riskReward": {
+          "type": "number"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string"
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string"
+        },
+        "executionId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": ["action", "ticker", "shares", "price", "timestamp", "executionMode", "status"]
+}

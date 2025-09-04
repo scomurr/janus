@@ -1,0 +1,239 @@
+{
+  "name": "Daily Trading Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Load portfolio from CSV or database\nconst items = [\n  {\n    json: {\n      action: 'load_portfolio',\n      timestamp: new Date().toISOString()\n    }\n  }\n];\n\nreturn items;"
+      },
+      "name": "Load Portfolio",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Load Portfolio\"].json[\"portfolio_url\"] || 'http://localhost:3000/api/portfolio'}}",
+        "options": {}
+      },
+      "name": "Get Portfolio Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Generate trading prompt with current portfolio data\nconst portfolioData = items[0].json;\nconst today = new Date().toISOString().split('T')[0];\n\nconst holdingsText = portfolioData.holdings && portfolioData.holdings.length > 0 \n  ? portfolioData.holdings.map(h => `${h.ticker}: ${h.shares} shares @ $${h.buy_price}`).join('\\n')\n  : 'No current holdings';\n\nconst prompt = `You are a professional portfolio analyst. Here is your current portfolio state as of ${today}:\n\n[ Holdings ]\n${holdingsText}\n\n[ Snapshot ]\nCash Balance: $${portfolioData.cash || 0}\nTotal Equity: $${portfolioData.total_equity || 0}\n\nRules:\n- You have $${portfolioData.cash || 0} in cash available for new positions\n- Prefer U.S. micro-cap stocks (<$300M market cap)\n- Full shares only, no options or derivatives\n- Use stop-losses for risk management\n- Be conservative with position sizing\n\nAnalyze the current market conditions and provide specific trading recommendations.\n\nRespond with ONLY a JSON object in this exact format:\n{\n    \"analysis\": \"Brief market analysis\",\n    \"trades\": [\n        {\n            \"action\": \"buy\",\n            \"ticker\": \"SYMBOL\",\n            \"shares\": 100,\n            \"price\": 25.50,\n            \"stop_loss\": 20.00,\n            \"reason\": \"Brief rationale\"\n        }\n    ],\n    \"confidence\": 0.8\n}\n\nOnly recommend trades you are confident about. If no trades are recommended, use an empty trades array.`;\n\nreturn [{\n  json: {\n    prompt: prompt,\n    portfolio: portfolioData\n  }\n}];"
+      },
+      "name": "Generate Prompt",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4",
+        "messages": {\n          "chatInput": "={{$node[\"Generate Prompt\"].json[\"prompt\"]}}"
+        },
+        "options": {\n          \"temperature\": 0.3,\n          \"maxTokens\": 1500\n        }
+      },
+      "name": "OpenAI Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse LLM response and validate\nlet response = items[0].json.response || items[0].json.message?.content;\n\ntry {\n  // Try to extract JSON from response\n  const jsonMatch = response.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    response = jsonMatch[0];\n  }\n  \n  const parsed = JSON.parse(response);\n  \n  return [{\n    json: {\n      analysis: parsed.analysis || 'No analysis provided',\n      trades: parsed.trades || [],\n      confidence: parsed.confidence || 0,\n      raw_response: response,\n      timestamp: new Date().toISOString()\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      error: `Failed to parse LLM response: ${error.message}`,\n      raw_response: response,\n      trades: [],\n      timestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{$node[\"Parse Response\"].json[\"trades\"].length}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Has Trades?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Execute recommended trades (simulation mode)\nconst response = items[0].json;\nconst trades = response.trades || [];\nconst portfolio = $node[\"Generate Prompt\"].json[\"portfolio\"];\n\nlet cash = portfolio.cash || 0;\nconst executedTrades = [];\n\nfor (const trade of trades) {\n  const action = trade.action?.toLowerCase();\n  const ticker = trade.ticker?.toUpperCase();\n  const shares = parseFloat(trade.shares) || 0;\n  const price = parseFloat(trade.price) || 0;\n  const stopLoss = parseFloat(trade.stop_loss) || 0;\n  const reason = trade.reason || 'LLM recommendation';\n  \n  if (action === 'buy') {\n    if (shares > 0 && price > 0 && ticker) {\n      const cost = shares * price;\n      if (cost <= cash) {\n        cash -= cost;\n        executedTrades.push({\n          action: 'BUY',\n          ticker,\n          shares,\n          price,\n          stop_loss: stopLoss,\n          cost,\n          reason,\n          status: 'EXECUTED',\n          timestamp: new Date().toISOString()\n        });\n      } else {\n        executedTrades.push({\n          action: 'BUY',\n          ticker,\n          shares,\n          price,\n          cost,\n          reason,\n          status: 'REJECTED',\n          error: `Insufficient cash (need $${cost}, have $${cash})`,\n          timestamp: new Date().toISOString()\n        });\n      }\n    }\n  } else if (action === 'sell') {\n    if (shares > 0 && price > 0 && ticker) {\n      const proceeds = shares * price;\n      cash += proceeds;\n      executedTrades.push({\n        action: 'SELL',\n        ticker,\n        shares,\n        price,\n        proceeds,\n        reason,\n        status: 'EXECUTED',\n        timestamp: new Date().toISOString()\n      });\n    }\n  }\n}\n\nreturn [{\n  json: {\n    analysis: response.analysis,\n    executed_trades: executedTrades,\n    remaining_cash: cash,\n    confidence: response.confidence,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Execute Trades",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/trades",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$node[\"Execute Trades\"].json}}",
+        "options": {}
+      },
+      "name": "Log Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [2000, 180]
+    },
+    {
+      "parameters": {
+        "functionCode": "// No trades to execute\nreturn [{\n  json: {\n    message: 'No trades recommended',\n    analysis: items[0].json.analysis,\n    confidence: items[0].json.confidence,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "No Action",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1780, 420]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Portfolio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Portfolio": {
+      "main": [
+        [
+          {
+            "node": "Get Portfolio Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Portfolio Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Has Trades?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Trades?": {
+      "main": [
+        [
+          {
+            "node": "Execute Trades",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Trades": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "id": "trading",
+      "name": "trading"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

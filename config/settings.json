@@ -1,0 +1,108 @@
+{
+  "name": "Janus Trading Automation",
+  "version": "1.0.0",
+  "description": "n8n-based ChatGPT micro-cap trading automation system",
+  
+  "trading": {
+    "defaultMode": "paper",
+    "executionHours": {
+      "start": "09:00",
+      "end": "16:00",
+      "timezone": "America/New_York"
+    },
+    "riskManagement": {
+      "enabled": true,
+      "maxPositionSize": 20,
+      "requireStopLoss": true,
+      "defaultStopLoss": -15,
+      "maxDailyTrades": 10
+    },
+    "positionSizing": {
+      "method": "percentage",
+      "defaultSize": 5,
+      "maxSize": 20,
+      "minSize": 1
+    }
+  },
+  
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.3,
+    "maxTokens": 1500,
+    "timeout": 30000,
+    "retries": 3
+  },
+  
+  "dataFeeds": {
+    "primary": "yahoo",
+    "fallback": "stooq",
+    "updateInterval": "15m",
+    "marketHours": {
+      "premarket": "04:00",
+      "open": "09:30",
+      "close": "16:00",
+      "afterhours": "20:00"
+    }
+  },
+  
+  "portfolio": {
+    "dataSource": "csv",
+    "csvPath": "./data/portfolio.csv",
+    "backupEnabled": true,
+    "backupInterval": "1d",
+    "historyRetention": "1y"
+  },
+  
+  "notifications": {
+    "enabled": true,
+    "channels": ["email", "webhook"],
+    "events": {
+      "tradeExecuted": true,
+      "stopLossTriggered": true,
+      "errorOccurred": true,
+      "dailySummary": true,
+      "weeklyResearch": true
+    }
+  },
+  
+  "api": {
+    "port": 3000,
+    "endpoints": {
+      "portfolio": "/api/portfolio",
+      "trades": "/api/trades",
+      "research": "/api/research",
+      "prices": "/api/prices"
+    },
+    "rateLimit": {
+      "windowMs": 900000,
+      "maxRequests": 100
+    }
+  },
+  
+  "workflows": {
+    "daily-trading": {
+      "enabled": true,
+      "schedule": "0 9 * * 1-5",
+      "timeout": 300000
+    },
+    "price-monitoring": {
+      "enabled": true,
+      "schedule": "*/15 9-16 * * 1-5",
+      "timeout": 60000
+    },
+    "weekly-research": {
+      "enabled": true,
+      "schedule": "0 8 * * 1",
+      "timeout": 600000
+    }
+  },
+  
+  "logging": {
+    "level": "info",
+    "file": "./logs/janus.log",
+    "maxSize": "10m",
+    "maxFiles": 5,
+    "format": "json"
+  }
+}
