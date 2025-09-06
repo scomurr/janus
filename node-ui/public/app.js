@@ -71,7 +71,14 @@ copyBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(promptTA.value);
     copyBtn.textContent = "Copied";
     setTimeout(() => (copyBtn.textContent = "Copy prompt"), 1000);
-  } catch {}
+  } catch (err) {
+    // Fallback method
+    promptTA.select();
+    promptTA.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    copyBtn.textContent = "Copied";
+    setTimeout(() => (copyBtn.textContent = "Copy prompt"), 1000);
+  }
 });
 
 refreshBtn.addEventListener("click", fetchBuys);
