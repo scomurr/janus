@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install only prod deps
+COPY package*.json ./
+RUN npm ci --only=production
+
+# App source
+COPY server.js ./server.js
+COPY public ./public
+
+EXPOSE 3000
+CMD ["node", "server.js"]

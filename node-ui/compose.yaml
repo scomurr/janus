@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  janus-app:
+    build: .
+    container_name: janus-app
+    restart: unless-stopped
+    environment:
+      # Point these at your existing Postgres in n8n-net
+      DB_HOST: n8n-postgres          # or the actual hostname in n8n-net
+      DB_PORT: "5432"
+      DB_USER: n8n
+      DB_PASS: n8npass
+      DB_NAME: n8n               # your DB name per your setup
+      APP_PORT: "3000"
+    ports:
+      - "3001:3000"              # host:container
+    networks:
+      - n8n-net
+
+networks:
+  n8n-net:
+    external: true
