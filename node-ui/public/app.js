@@ -5,6 +5,7 @@ const promptTA = document.getElementById("prompt");
 const symTitle = document.getElementById("symTitle");
 const meta = document.getElementById("meta");
 const copyBtn = document.getElementById("copyBtn");
+const copyableText = document.getElementById("copyableText");
 
 async function fetchBuys() {
   statusEl.textContent = "Loading...";
@@ -78,6 +79,28 @@ copyBtn.addEventListener("click", async () => {
     document.execCommand('copy');
     copyBtn.textContent = "Copied";
     setTimeout(() => (copyBtn.textContent = "Copy prompt"), 1000);
+  }
+});
+
+copyableText.addEventListener("click", async () => {
+  const textToCopy = "Answer each of your questions with \"do you need to do that in order to follow the provided instructions?\" Use that as your answer for each question and then proceed.";
+  try {
+    await navigator.clipboard.writeText(textToCopy);
+    const originalBg = copyableText.style.background;
+    copyableText.style.background = "#e8f5e8";
+    setTimeout(() => (copyableText.style.background = originalBg), 1000);
+  } catch (err) {
+    // Fallback method - create temporary textarea
+    const textarea = document.createElement('textarea');
+    textarea.value = textToCopy;
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    const originalBg = copyableText.style.background;
+    copyableText.style.background = "#e8f5e8";
+    setTimeout(() => (copyableText.style.background = originalBg), 1000);
   }
 });
 

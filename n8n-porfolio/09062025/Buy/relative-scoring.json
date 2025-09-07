@@ -1,0 +1,13 @@
+[
+  { "ticker": "IMPP", "signal": "Buy", "conviction": 5 },
+  { "ticker": "PSHG", "signal": "Buy", "conviction": 5 },
+  { "ticker": "MIND", "signal": "Buy", "conviction": 4 },
+  { "ticker": "CHRS", "signal": "Buy", "conviction": 4 },
+  { "ticker": "MAPS", "signal": "Buy", "conviction": 4 },
+  { "ticker": "IMMR", "signal": "Buy", "conviction": 3 },
+  { "ticker": "CRNT", "signal": "Buy", "conviction": 3 },
+  { "ticker": "PBYI", "signal": "Buy", "conviction": 3 },
+  { "ticker": "GAMB", "signal": "Buy", "conviction": 2 },
+  { "ticker": "MATH", "signal": "Buy", "conviction": 2 },
+  { "ticker": "LGPS", "signal": "Buy", "conviction": 1 }
+]
