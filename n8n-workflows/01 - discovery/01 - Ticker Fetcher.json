@@ -1,0 +1,376 @@
+{
+  "name": "01 - Ticker Fetcher",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "a2d8b8b1-cfe0-46b4-80a9-ef502104ab0d",
+      "name": "Fetch NASDAQ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt",
+        "responseFormat": "string",
+        "options": {}
+      },
+      "id": "2b7c0d2b-4787-48e5-bddc-b0ad1fdd6968",
+      "name": "Fetch NYSE/AMEX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS ticker_universe (\n  symbol TEXT PRIMARY KEY,\n  name TEXT,\n  exchange TEXT,\n  market_cap BIGINT,\n  last_updated TIMESTAMP\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -768,
+        160
+      ],
+      "id": "42fe9cd9-c1c6-4b2b-b015-fb397acf159b",
+      "name": "Create Table if Missing",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json.data;\nconst lines = input.split('\\n').slice(1);\n\nfunction escapeSQL(str) {\n  return str.replace(/'/g, \"''\");\n}\n\nreturn lines\n  .filter(line => line && !line.startsWith('File Creation Time'))\n  .map(line => {\n    const parts = line.split('|');\n    return {\n      json: {\n        symbol: parts[0],\n        name: escapeSQL(parts[1]),\n        exchange: $input.first().json.exchange\n      }\n    };\n  });\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        48
+      ],
+      "id": "1de25669-6042-4cf5-9d8f-cd305030e03b",
+      "name": "Parse Nasdaq"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all()[0].json.data;\nconst lines = input.split('\\n').slice(1);\n\nfunction escapeSQL(str) {\n  return str.replace(/'/g, \"''\");\n}\n\nreturn lines\n  .filter(line => line && !line.startsWith('File Creation Time'))\n  .map(line => {\n    const parts = line.split('|');\n    return {\n      json: {\n        symbol: parts[0],\n        name: escapeSQL(parts[1]),\n        exchange: $input.first().json.exchange\n      }\n    };\n  });\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        256
+      ],
+      "id": "aca6cc07-7ea7-48c2-b8e6-18d9021a11ed",
+      "name": "Parse Others"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cb8d3d49-2856-425d-9c51-9fec46c510db",
+              "name": "exchange",
+              "value": "NASDAQ",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        48
+      ],
+      "id": "5acaed5b-51ae-48d4-b85b-2185d2a693f1",
+      "name": "Set NASDAQ"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cb8d3d49-2856-425d-9c51-9fec46c510db",
+              "name": "exchange",
+              "value": "OTHER",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -320,
+        256
+      ],
+      "id": "42b8363e-1ea0-43d9-96ef-42e1078100d9",
+      "name": "Set OTHER"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticker_universe (symbol, name, exchange)\nVALUES ('{{ $json.symbol }}', '{{ $json.name }}', '{{ $json.exchange }}')\nON CONFLICT (symbol) DO NOTHING;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        336,
+        144
+      ],
+      "id": "e3176bbc-3ef9-4291-b4dc-6c45e55dad5b",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        128,
+        144
+      ],
+      "id": "df0fca0d-68ed-4348-b2b5-7b64ffd29988",
+      "name": "Merge"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        128,
+        384
+      ],
+      "id": "df5bd360-d930-48fa-a72a-92beead2d62d",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error:  {{ $json.execution.error.message }}\nCheck N8N",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        336,
+        384
+      ],
+      "id": "cab96448-2c85-46f1-bca3-278e98fa7abf",
+      "name": "Discord",
+      "webhookId": "ca20c902-d9f2-42e0-903e-8403d43611f1",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "hXnySa96N3aNgiBT",
+          "name": "Janus Errors Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=01 - Ticker Fetcher Complete\nCheck for errors",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        560,
+        144
+      ],
+      "id": "103e4488-36bb-4fb9-bbcb-2c75c4edfa15",
+      "name": "Workflow Complete",
+      "webhookId": "ca20c902-d9f2-42e0-903e-8403d43611f1",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "hXnySa96N3aNgiBT",
+          "name": "Janus Errors Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 17
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -992,
+        160
+      ],
+      "id": "2bfeb1b2-5a56-4d8e-bd88-41da6a609e4f",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch NASDAQ": {
+      "main": [
+        [
+          {
+            "node": "Set NASDAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch NYSE/AMEX": {
+      "main": [
+        [
+          {
+            "node": "Set OTHER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Table if Missing": {
+      "main": [
+        [
+          {
+            "node": "Fetch NASDAQ",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch NYSE/AMEX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Nasdaq": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set NASDAQ": {
+      "main": [
+        [
+          {
+            "node": "Parse Nasdaq",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set OTHER": {
+      "main": [
+        [
+          {
+            "node": "Parse Others",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Others": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Workflow Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create Table if Missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "624d0733-f28a-49d3-810a-4a330f9fc910",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "gS7Lyonst9xnypoc",
+  "tags": []
+}

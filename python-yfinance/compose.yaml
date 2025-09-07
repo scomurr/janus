@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  marketcap-api:
+    build: .
+    container_name: marketcap-api
+    ports:
+      - "5000:5000"
+    networks:
+      - n8n-net
+
+networks:
+  n8n-net:
+    external: true

@@ -1,0 +1,643 @@
+{
+  "name": "02 - Weekly Ticker Info Refresh",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 4
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        304
+      ],
+      "id": "86c00d03-8ea3-4b81-bbe0-d3c970dd4f33",
+      "name": "Run Sunday at 4AM"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT count(*) FROM ticker_universe;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        304
+      ],
+      "id": "2ba45e0a-7c5d-4de6-93b9-0f141fa4452b",
+      "name": "Get Symbol Count",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        672,
+        304
+      ],
+      "id": "eaf224e7-2190-4639-b037-1c405c45102b",
+      "name": "Start of Loop (noop)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "668a695b-6a7f-4645-bbfd-dc4dd4a6f363",
+              "leftValue": "={{ $items.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        64
+      ],
+      "id": "a52e37ee-702e-4411-bfd1-f384e91bfae7",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1792,
+        256
+      ],
+      "id": "1a70e67f-a93e-486a-8ad4-3bfa73214ec0",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "url": "=http://marketcap-api:5000/info?symbols={{ $('Smush Symbols').item.json.symbols }}&fields=marketCap,volume,trailingPE,fiftyTwoWeekHigh,fiftyTwoWeekLow,dividendYield,totalRevenue,grossMargins\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        64
+      ],
+      "id": "cf4d4c3d-a3e6-410f-8bcc-78e965be372b",
+      "name": "YF - Get Market Cap Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const symbols = items.map(i => i.json.symbol).join(',');\nconst quotedSymbols = items.map(i => `'${i.json.symbol}'`).join(',');\nreturn [{\n  json: {\n    symbols,\n    quotedSymbols\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        64
+      ],
+      "id": "2fe2e4de-893e-455e-9a3c-b87aed043105",
+      "name": "Smush Symbols"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item.json;\nconst now = new Date().toISOString();\n\nfunction sanitize(value) {\n  const n = Number(value);\n  return Number.isFinite(n) ? n : null;\n}\n\nreturn Object.entries(data).map(([symbol, enrichment]) => {\n  const enrichment_data = {};\n\n  for (const [key, val] of Object.entries(enrichment)) {\n    enrichment_data[key] = sanitize(val);\n  }\n\n  return {\n    json: {\n      symbol,\n      enrichment_data,\n      last_updated: now\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        64
+      ],
+      "id": "9046e3aa-d020-4bfe-aac3-3fb1b0bbf215",
+      "name": "Split to Individual"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ticker_universe\nSET\n  market_cap =       COALESCE({{ $json.enrichment_data.marketCap }}::BIGINT, market_cap),\n  volume =           COALESCE({{ $json.enrichment_data.volume }}::BIGINT, volume),\n  trailing_pe =      COALESCE({{ $json.enrichment_data.trailingPE }}::DOUBLE PRECISION, trailing_pe),\n  fifty_two_week_high = COALESCE({{ $json.enrichment_data.fiftyTwoWeekHigh }}::DOUBLE PRECISION, fifty_two_week_high),\n  fifty_two_week_low  = COALESCE({{ $json.enrichment_data.fiftyTwoWeekLow }}::DOUBLE PRECISION, fifty_two_week_low),\n  dividend_yield    = COALESCE({{ $json.enrichment_data.dividendYield }}::DOUBLE PRECISION, dividend_yield),\n  total_revenue     = COALESCE({{ $json.enrichment_data.totalRevenue }}::BIGINT, total_revenue),\n  gross_margins     = COALESCE({{ $json.enrichment_data.grossMargins }}::DOUBLE PRECISION, gross_margins),\n  last_updated      = COALESCE('{{ $json.last_updated }}'::TIMESTAMP, last_updated),\n  info_raw          = '{{ JSON.stringify($json.enrichment_data) }}'::JSONB\nWHERE symbol = '{{ $json.symbol }}';\n",
+        "options": {
+          "replaceEmptyStrings": true
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2464,
+        64
+      ],
+      "id": "2829871d-3ef3-42bd-adc5-cddf4f1fc006",
+      "name": "Update Market Cap and Last Updated",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ticker_universe\nSET last_scanned = NOW()\nWHERE symbol = '{{ $(\"Get n-50 Tickers\").item.json.symbol }}';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1792,
+        -128
+      ],
+      "id": "adb0e0b9-dcf7-4f17-a8d8-0ca3bf9ffc53",
+      "name": "Update Last Scanned",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT symbol\nFROM ticker_universe\nWHERE last_scanned IS NULL\n   OR last_scanned < CURRENT_DATE\nLIMIT 50;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1344,
+        64
+      ],
+      "id": "74214a08-a430-42e6-a99e-123f534c186a",
+      "name": "Get n-50 Tickers",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    loopCount: $input.first().json.loopCount,\n    count: $input.first().json.count\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        240
+      ],
+      "id": "8e37f60b-c97f-4f55-bc69-675eae3d7b3f",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "53ec71b8-9e9d-4565-914c-a38126e6f19c",
+              "leftValue": "={{ $json.loopCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        64
+      ],
+      "id": "22eccf9c-b333-4fae-b23e-c2573a158613",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0663012f-7c32-4e15-be60-86774664f815",
+              "leftValue": "={{ $runIndex }}",
+              "rightValue": "=  {{ $json.loopCount }}",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3136,
+        240
+      ],
+      "id": "e6d6c348-beb7-434e-9831-6807eeffb605",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        64
+      ],
+      "id": "71a1e69c-32dc-442e-9ffb-76da75a49113",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3d564d9e-3299-4f7a-815c-02211828159c",
+              "name": "loopCount",
+              "value": "={{ Math.ceil($json.count / 50) }}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        304
+      ],
+      "id": "903f5fcd-dc15-4e3d-918f-9df3414361a9",
+      "name": "Set loopCount "
+    },
+    {
+      "parameters": {
+        "amount": 0.5
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3360,
+        480
+      ],
+      "id": "c635c3ed-4a3b-469e-a9e2-c4819fd22529",
+      "name": "Wait",
+      "webhookId": "32e65c4c-6183-42f9-a94c-834f7c71f113"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2912,
+        240
+      ],
+      "id": "85578cac-5121-4101-9193-5279a39641aa",
+      "name": "Merge",
+      "executeOnce": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        704
+      ],
+      "id": "6eeed2aa-d8e2-44c6-a9dc-75b839202a22",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error:  {{ $json.execution.error.message }}\nWorkflow: 01 - Weekly Market Cap Refresh\nCheck N8N",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        224,
+        704
+      ],
+      "id": "e8a7168d-6cd8-4e93-894b-60eb8d5149a6",
+      "name": "Discord",
+      "webhookId": "ca20c902-d9f2-42e0-903e-8403d43611f1",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "hXnySa96N3aNgiBT",
+          "name": "Janus Errors Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "01 - Weekly Market Cap Refresh Complete\nCheck for errors",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        192
+      ],
+      "id": "93bc7be4-6005-4314-ad78-cc0662235811",
+      "name": "Discord1",
+      "webhookId": "ee374647-4b3b-4771-9f65-644ab0050726",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "hXnySa96N3aNgiBT",
+          "name": "Janus Errors Webhook"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Run Sunday at 4AM": {
+      "main": [
+        [
+          {
+            "node": "Get Symbol Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Symbol Count": {
+      "main": [
+        [
+          {
+            "node": "Set loopCount ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start of Loop (noop)": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update Last Scanned",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Smush Symbols",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Smush Symbols": {
+      "main": [
+        [
+          {
+            "node": "YF - Get Market Cap Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YF - Get Market Cap Data": {
+      "main": [
+        [
+          {
+            "node": "Split to Individual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split to Individual": {
+      "main": [
+        [
+          {
+            "node": "Update Market Cap and Last Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get n-50 Tickers": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Market Cap and Last Updated": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Get n-50 Tickers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Discord1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set loopCount ": {
+      "main": [
+        [
+          {
+            "node": "Start of Loop (noop)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Start of Loop (noop)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Last Scanned": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ba20367d-4cb2-4ebe-ab0b-8faf08e0de98",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "DqJZOmSa45b6ALxt",
+  "tags": [
+    {
+      "createdAt": "2025-09-04T15:23:38.975Z",
+      "updatedAt": "2025-09-04T15:23:38.975Z",
+      "id": "yQaAGmyd3yVCL790",
+      "name": "janus"
+    }
+  ]
+}
