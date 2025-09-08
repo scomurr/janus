@@ -2,6 +2,50 @@
 
 Janus is a comprehensive financial analysis platform designed for systematic micro-cap equity research and portfolio management. The system combines automated data collection, AI-powered stock analysis, and real-time portfolio tracking to identify and manage micro-cap investment opportunities.
 
+## Use Case
+
+Janus is designed for systematic micro-cap equity research where traditional analysis tools are insufficient due to limited coverage and data availability. The platform automates the entire research pipeline from initial discovery through final investment decisions, making it possible to efficiently analyze thousands of micro-cap opportunities that would be impractical to research manually.
+
+## Ticker Selection Criteria
+
+The system applies rigorous filtering criteria to identify investable micro-cap opportunities:
+
+### Market Cap & Size Requirements
+- **Small-cap stocks only**: Market cap under $300 million
+- **Revenue efficiency**: Revenue must be at least 1% of market cap (excludes shell companies)
+
+### Financial Health Requirements  
+- **Profitable companies**: Must have positive revenue and gross margins
+- **Reasonable valuation**: P/E ratio between 1-100 (excludes loss-making and extremely overvalued stocks)
+- **Dividend sanity check**: Dividend yield under 50% (excludes dividend traps)
+
+### Liquidity & Trading Requirements
+- **Liquid stocks**: Daily volume above 10,000 shares  
+- **Trading liquidity**: Daily volume must exceed market cap ÷ 1000 (ensures adequate liquidity)
+- **Price stability**: 52-week high/low ratio under 100x (excludes extreme penny stocks)
+
+## Technical Indicators & Analysis Framework
+
+### Core Financial Metrics
+- Market capitalization, revenue, and gross margins
+- Trailing P/E ratio and dividend yield analysis
+- 52-week price range and volatility assessment
+- Daily trading volume and liquidity analysis
+
+### AI-Powered Analysis Criteria
+The system evaluates stocks across multiple dimensions using a structured analytical framework:
+
+- **Liquidity & Tradability**: Average daily dollar volume, float percentage, bid-ask spread
+- **Dilution Risk Assessment**: Recent offerings, ATM usage, warrants, convertibles, S-3 shelf registrations
+- **Solvency Analysis**: Cash vs. burn rate, debt maturity schedules, going-concern risk
+- **Governance & Compliance**: Insider control, related-party transactions, listing status, audit flags
+- **Catalyst Identification**: Upcoming events within 6 months (earnings, contracts, regulatory approvals)
+
+### Multi-Model AI Scoring
+- **OpenAI GPT-4**: Advanced reasoning and financial analysis
+- **Google Gemini**: Parallel analysis for consensus building
+- **Local LLM (Ollama)**: Independent validation and cost-effective processing
+
 ## System Overview
 
 The Janus platform consists of several interconnected components that work together to provide end-to-end micro-cap equity research capabilities:
@@ -62,7 +106,3 @@ The system expects the following PostgreSQL tables:
 4. Launch the Node.js Research Console for portfolio monitoring
 
 Each component directory contains detailed setup and configuration documentation in its respective `.md` file.
-
-## Use Case
-
-Janus is designed for systematic micro-cap equity research where traditional analysis tools are insufficient due to limited coverage and data availability. The platform automates the entire research pipeline from initial discovery through final investment decisions, making it possible to efficiently analyze thousands of micro-cap opportunities that would be impractical to research manually.
