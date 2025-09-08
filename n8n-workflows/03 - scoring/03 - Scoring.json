@@ -2,17 +2,6 @@
   "name": "03 - Scoring",
   "nodes": [
     {
-      "parameters": {},
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [
-        -768,
-        -32
-      ],
-      "id": "50e8e9eb-ba5e-4d2a-a85b-ad57a33f4342",
-      "name": "When clicking ‘Execute workflow’"
-    },
-    {
       "parameters": {
         "operation": "executeQuery",
         "query": "CREATE TABLE IF NOT EXISTS ticker_scores (\nsymbol TEXT PRIMARY KEY,\nscore INTEGER,\nrecommendation TEXT,\nreason TEXT,\nlast_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n",
@@ -239,6 +228,72 @@
       ],
       "id": "02b281e1-64b9-4527-958b-375a607fb0cb",
       "name": "Parse Llama3 Response"
+    },
+    {
+      "parameters": {
+        "content": "On prem needs to be changed to be an an agentic flow granting the AI access to the interwebs???"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        96,
+        752
+      ],
+      "typeVersion": 1,
+      "id": "388a0dd8-05b1-4ff9-8e99-a4f3e44f943b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -768,
+        -32
+      ],
+      "id": "1713ae51-a670-4652-beb6-9ee97269609b",
+      "name": "Sunday 8AM"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        496
+      ],
+      "id": "d4e4cd8c-9d7f-4bc0-9d5e-bf3b022c00df",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error:  {{ $json.execution.error.message }}\nWorkflow: 01 - Ticker Fetcher\nCheck N8N",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        496
+      ],
+      "id": "3020f032-5a54-4e0d-87ae-3726fef69908",
+      "name": "Discord",
+      "webhookId": "ca20c902-d9f2-42e0-903e-8403d43611f1",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "hXnySa96N3aNgiBT",
+          "name": "Janus Errors Webhook"
+        }
+      }
     }
   ],
   "pinData": {
@@ -6388,17 +6443,6 @@
     ]
   },
   "connections": {
-    "When clicking ‘Execute workflow’": {
-      "main": [
-        [
-          {
-            "node": "Create Table if Missing",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Create Table if Missing": {
       "main": [
         [
@@ -6529,13 +6573,35 @@
           }
         ]
       ]
+    },
+    "Sunday 8AM": {
+      "main": [
+        [
+          {
+            "node": "Create Table if Missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "dac0537f-aa72-401b-a8b3-d352366cba37",
+  "versionId": "f53eb805-03ac-4591-aede-7f4020c9b1a3",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"

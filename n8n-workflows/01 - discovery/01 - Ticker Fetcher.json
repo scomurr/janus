@@ -34,7 +34,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE TABLE IF NOT EXISTS ticker_universe (\n  symbol TEXT PRIMARY KEY,\n  name TEXT,\n  exchange TEXT,\n  market_cap BIGINT,\n  last_updated TIMESTAMP\n);\n",
+        "query": "CREATE TABLE IF NOT EXISTS ticker_universe (\n  symbol TEXT PRIMARY KEY,\n  name TEXT,\n  exchange TEXT,\n  market_cap BIGINT,\n  volume BIGINT,\n  trailing_pe DOUBLE PRECISION,\n  fifty_two_week_high DOUBLE PRECISION,\n  fifty_two_week_low DOUBLE PRECISION,\n  dividend_yield DOUBLE PRECISION,\n  total_revenue BIGINT,\n  gross_margins DOUBLE PRECISION,\n  info_raw JSONB,\n  last_updated TIMESTAMP,\n  last_scanned TIMESTAMP\n);\n",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
@@ -127,27 +127,6 @@
       "name": "Set OTHER"
     },
     {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO ticker_universe (symbol, name, exchange)\nVALUES ('{{ $json.symbol }}', '{{ $json.name }}', '{{ $json.exchange }}')\nON CONFLICT (symbol) DO NOTHING;\n",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        336,
-        144
-      ],
-      "id": "e3176bbc-3ef9-4291-b4dc-6c45e55dad5b",
-      "name": "Execute a SQL query",
-      "credentials": {
-        "postgres": {
-          "id": "MI553DLfDKBYBMXy",
-          "name": "Postgres account"
-        }
-      }
-    },
-    {
       "parameters": {},
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -172,7 +151,7 @@
     {
       "parameters": {
         "authentication": "webhook",
-        "content": "=Error:  {{ $json.execution.error.message }}\nCheck N8N",
+        "content": "=Error:  {{ $json.execution.error.message }}\nWorkflow: 01 - Ticker Fetcher\nCheck N8N",
         "options": {}
       },
       "type": "n8n-nodes-base.discord",
@@ -215,9 +194,34 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ticker_universe (symbol, name, exchange)\nVALUES ('{{ $json.symbol }}', '{{ $json.name }}', '{{ $json.exchange }}')\nON CONFLICT (symbol) DO NOTHING;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        336,
+        144
+      ],
+      "id": "e3176bbc-3ef9-4291-b4dc-6c45e55dad5b",
+      "name": "Update ticker_universe",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
+              "field": "weeks",
+              "triggerAtDay": [
+                6
+              ],
               "triggerAtHour": 17
             }
           ]
@@ -230,7 +234,7 @@
         160
       ],
       "id": "2bfeb1b2-5a56-4d8e-bd88-41da6a609e4f",
-      "name": "Schedule Trigger"
+      "name": "Saturday 5PM"
     }
   ],
   "pinData": {},
@@ -321,7 +325,7 @@
       "main": [
         [
           {
-            "node": "Execute a SQL query",
+            "node": "Update ticker_universe",
             "type": "main",
             "index": 0
           }
@@ -339,7 +343,7 @@
         ]
       ]
     },
-    "Execute a SQL query": {
+    "Update ticker_universe": {
       "main": [
         [
           {
@@ -350,7 +354,7 @@
         ]
       ]
     },
-    "Schedule Trigger": {
+    "Saturday 5PM": {
       "main": [
         [
           {
@@ -362,15 +366,22 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "624d0733-f28a-49d3-810a-4a330f9fc910",
+  "versionId": "162647cb-4c18-4c1e-98fb-114a4ff58413",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
   },
   "id": "gS7Lyonst9xnypoc",
-  "tags": []
+  "tags": [
+    {
+      "createdAt": "2025-09-04T15:23:38.975Z",
+      "updatedAt": "2025-09-04T15:23:38.975Z",
+      "id": "yQaAGmyd3yVCL790",
+      "name": "janus"
+    }
+  ]
 }

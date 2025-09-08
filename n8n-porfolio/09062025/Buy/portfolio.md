@@ -2,14 +2,14 @@
 
 ## Stock Tickers
 
-- CHRS (Coherus Oncology)
-- CRNT (Ceragon Networks Ltd.)
+- CHRS 
+- CRNT 
 - GAMB
-- IMMR (Immersion Corporation)
+- IMMR 
 - IMPP
 - LGPS
 - MAPS
 - MATH
 - MIND
 - PSHG
-- PBYI (Puma Biotechnology)
+- PBYI 
