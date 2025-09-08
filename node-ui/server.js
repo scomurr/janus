@@ -162,6 +162,123 @@ app.get("/api/ticker/:symbol/prompt", async (req, res) => {
   }
 });
 
+// 3) Get daily portfolio valuation data
+app.get("/api/portfolio/valuations", async (_req, res) => {
+  try {
+    const q = `
+      SELECT date, symbol, value_close
+      FROM daily_valuation
+      WHERE value_close IS NOT NULL
+      ORDER BY date ASC
+    `;
+    const { rows } = await pool.query(q);
+    
+    console.log(`Found ${rows.length} rows in daily_valuation table`);
+    
+    if (rows.length === 0) {
+      return res.json({
+        portfolioTotals: [],
+        assetData: {},
+        symbols: [],
+        message: "No data found in daily_valuation table"
+      });
+    }
+    
+    // Aggregate data by date for totals and by symbol for individual assets
+    const byDate = {};
+    const bySymbol = {};
+    const symbols = new Set();
+    
+    rows.forEach(row => {
+      const dateStr = row.date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      const symbol = row.symbol;
+      const value = parseFloat(row.value_close) || 0;
+      
+      symbols.add(symbol);
+      
+      // Aggregate by date (portfolio total)
+      if (!byDate[dateStr]) {
+        byDate[dateStr] = { date: dateStr, total: 0 };
+      }
+      byDate[dateStr].total += value;
+      
+      // Aggregate by symbol
+      if (!bySymbol[symbol]) {
+        bySymbol[symbol] = [];
+      }
+      bySymbol[symbol].push({ date: dateStr, value });
+    });
+    
+    // Convert to arrays for easier frontend consumption
+    const portfolioTotals = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+    const assetData = {};
+    
+    Array.from(symbols).forEach(symbol => {
+      assetData[symbol] = bySymbol[symbol].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    
+    console.log(`Returning data for ${symbols.size} symbols, ${portfolioTotals.length} dates`);
+    
+    res.json({
+      portfolioTotals,
+      assetData,
+      symbols: Array.from(symbols).sort()
+    });
+  } catch (err) {
+    console.error("GET /api/portfolio/valuations error:", err);
+    res.status(500).json({ 
+      error: "query_failed", 
+      message: err.message,
+      details: "Check server logs for more information"
+    });
+  }
+});
+
+// 4) Get current day portfolio summary
+app.get("/api/portfolio/current", async (_req, res) => {
+  try {
+    const q = `
+      SELECT symbol, value_close, date
+      FROM daily_valuation
+      WHERE date = (SELECT MAX(date) FROM daily_valuation)
+        AND value_close IS NOT NULL
+      ORDER BY symbol ASC
+    `;
+    const { rows } = await pool.query(q);
+    
+    console.log(`Found ${rows.length} current portfolio entries`);
+    
+    if (rows.length === 0) {
+      return res.json({
+        assets: [],
+        total: 0,
+        date: null,
+        message: "No current portfolio data found"
+      });
+    }
+    
+    const assets = rows.map(row => ({
+      symbol: row.symbol,
+      value: parseFloat(row.value_close) || 0
+    }));
+    
+    const total = assets.reduce((sum, asset) => sum + asset.value, 0);
+    
+    res.json({
+      assets,
+      total,
+      date: rows[0].date
+    });
+  } catch (err) {
+    console.error("GET /api/portfolio/current error:", err);
+    res.status(500).json({ 
+      error: "query_failed",
+      message: err.message,
+      details: "Check server logs for more information"
+    });
+  }
+});
+
 // Healthcheck
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
