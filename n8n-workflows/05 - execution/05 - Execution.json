@@ -10,7 +10,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        896,
+        1120,
         96
       ],
       "id": "a4bc7909-774b-4468-9be8-c9b52eb0635e",
@@ -24,12 +24,12 @@
     },
     {
       "parameters": {
-        "jsCode": "const budget = 1000;\nconst total = items.reduce((sum, i) => sum + i.json.conviction, 0);\nreturn items.map(i => {\n  const alloc = Math.round((i.json.conviction / total) * budget * 100) / 100;\n  return {\n    json: {\n      ...i.json,\n      allocation_usd: alloc,\n      total_portfolio_value: budget\n    }\n  };\n});\n"
+        "jsCode": "const budget = $('Get Porfolio Value').first().json.current_portfolio_value\nconst total = items.reduce((sum, i) => sum + i.json.conviction, 0);\nreturn items.map(i => {\n  const alloc = Math.round((i.json.conviction / total) * budget * 100) / 100;\n  return {\n    json: {\n      ...i.json,\n      allocation_usd: alloc,\n      total_portfolio_value: budget\n    }\n  };\n});\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
+        1328,
         96
       ],
       "id": "de5c0898-becd-47bc-bcc6-4d8eee8e5621",
@@ -44,7 +44,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1312,
+        1520,
         96
       ],
       "id": "564e619e-4b67-49f9-b26a-40168508a90a",
@@ -240,6 +240,27 @@
       ],
       "id": "7e7dfa70-b0e4-4392-b7c2-2131a0d51adc",
       "name": "4PM Central"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COALESCE(SUM(value_close), 1000) as current_portfolio_value\nFROM daily_valuation\nWHERE date = (SELECT MAX(date) FROM daily_valuation);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        896,
+        96
+      ],
+      "id": "4434d096-3e21-49ef-9a51-46f1c77e048c",
+      "name": "Get Porfolio Value",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
     }
   ],
   "pinData": {
@@ -306,7 +327,7 @@
       "main": [
         [
           {
-            "node": "Get Today's Assets",
+            "node": "Get Porfolio Value",
             "type": "main",
             "index": 0
           }
@@ -389,13 +410,24 @@
           }
         ]
       ]
+    },
+    "Get Porfolio Value": {
+      "main": [
+        [
+          {
+            "node": "Get Today's Assets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "1fd56592-7204-4c9d-b563-cef2f9e3e05e",
+  "versionId": "62636d3b-654a-479a-9f10-6d70aab5a67f",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
