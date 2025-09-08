@@ -60,5 +60,45 @@ def info():
             result[sym] = {k: info.get(k) for k in keys}
     return jsonify(result)
 
+@app.route("/price")
+def price():
+    ticker = request.args.get("ticker")
+    price_type = request.args.get("type", "close").lower()
+    
+    if not ticker:
+        return jsonify({"error": "Missing ticker param"}), 400
+    
+    valid_types = ["close", "current", "open"]
+    if price_type not in valid_types:
+        return jsonify({"error": f"Invalid type. Must be one of: {', '.join(valid_types)}"}), 400
+    
+    try:
+        stock = yf.Ticker(ticker.upper())
+        
+        if price_type == "current":
+            # Get current price from info
+            info = stock.info
+            current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if current_price is None:
+                return jsonify({"error": "Current price not available"}), 404
+            return jsonify({"ticker": ticker.upper(), "type": "current", "price": current_price})
+        
+        else:
+            # Get historical data for close/open
+            hist = stock.history(period="5d")  # Get recent data
+            if hist.empty:
+                return jsonify({"error": "No historical data available"}), 404
+            
+            if price_type == "close":
+                latest_close = hist['Close'].iloc[-1]
+                return jsonify({"ticker": ticker.upper(), "type": "close", "price": float(latest_close)})
+            
+            elif price_type == "open":
+                latest_open = hist['Open'].iloc[-1]
+                return jsonify({"ticker": ticker.upper(), "type": "open", "price": float(latest_open)})
+                
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch data: {str(e)}"}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
