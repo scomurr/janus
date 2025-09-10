@@ -1,0 +1,523 @@
+{
+  "name": "05c - Weekly Strategy",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 200],
+      "id": "weekly-trigger-monday",
+      "name": "Monday 9 AM - Week Start"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS weekly_positions (\n  id SERIAL PRIMARY KEY,\n  symbol TEXT NOT NULL,\n  date DATE NOT NULL,\n  shares_bought DECIMAL(15,6) DEFAULT 0,\n  shares_sold DECIMAL(15,6) DEFAULT 0,\n  buy_price DECIMAL(15,6),\n  sell_price DECIMAL(15,6),\n  conviction_at_buy DECIMAL(5,2),\n  conviction_at_sell DECIMAL(5,2),\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  UNIQUE(symbol, date, shares_bought, shares_sold)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [400, 200],
+      "id": "create-weekly-positions-table",
+      "name": "Create weekly_positions Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DO $$\nBEGIN\n  IF NOT EXISTS (SELECT 1 FROM weekly_positions WHERE symbol = 'USDW') THEN\n    INSERT INTO weekly_positions (symbol, date, shares_bought, conviction_at_buy, created_at)\n    VALUES ('USDW', '2024-09-08', 1000.00, 0, NOW());\n  END IF;\nEND $$;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [600, 200],
+      "id": "seed-usdw-cash",
+      "name": "Seed USDW Cash if New Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  (COALESCE(SUM(shares_bought), 0) - COALESCE(SUM(shares_sold), 0)) AS current_cash_balance\nFROM weekly_positions \nWHERE symbol = 'USDW';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [800, 200],
+      "id": "get-usdw-cash",
+      "name": "Get USDW Cash Available",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT symbol, conviction\nFROM ticker_buys\nWHERE last_updated >= now() - interval '24 hours'\n  AND conviction > 0\nORDER BY symbol;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1000, 200],
+      "id": "get-conviction-scores",
+      "name": "Get Latest Conviction Scores",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const availableCash = $('Get USDW Cash Available').first().json.current_cash_balance;\nconst tickers = $('Get Latest Conviction Scores').all();\n\n// Calculate total conviction (excluding USDW)\nconst totalConviction = tickers.reduce((sum, ticker) => {\n  return sum + ticker.json.conviction;\n}, 0);\n\nif (totalConviction === 0) {\n  return [];\n}\n\n// Calculate allocations\nreturn tickers.map(ticker => ({\n  json: {\n    symbol: ticker.json.symbol,\n    conviction: ticker.json.conviction,\n    allocation_usd: Math.round((ticker.json.conviction / totalConviction) * availableCash * 100) / 100\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "id": "calculate-position-sizes",
+      "name": "Calculate Position Sizes"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  '{{ $json.symbol }}' as symbol,\n  {{ $json.allocation_usd }} as allocation_usd,\n  {{ $json.conviction }} as conviction,\n  dp.price_open\nFROM daily_prices dp\nWHERE dp.symbol = '{{ $json.symbol }}'\n  AND dp.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1400, 200],
+      "id": "get-monday-prices",
+      "name": "Get Monday Open Prices",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().split('T')[0];\nconst availableCash = $('Get USDW Cash Available').first().json.current_cash_balance;\nlet totalSpent = 0;\n\nconst results = items.map(item => {\n  const shares = Math.floor(item.json.allocation_usd / item.json.price_open * 10000) / 10000;\n  const actualSpent = shares * item.json.price_open;\n  totalSpent += actualSpent;\n  \n  return {\n    json: {\n      symbol: item.json.symbol,\n      date: today,\n      shares_bought: shares,\n      shares_sold: null,\n      buy_price: item.json.price_open,\n      sell_price: null,\n      conviction_at_buy: item.json.conviction,\n      conviction_at_sell: null\n    }\n  };\n});\n\n// Add USDW record showing remaining cash after purchases\nconst remainingCash = availableCash - totalSpent;\nresults.push({\n  json: {\n    symbol: 'USDW',\n    date: today,\n    shares_bought: remainingCash,\n    shares_sold: null,\n    buy_price: 1.0,\n    sell_price: null,\n    conviction_at_buy: 0,\n    conviction_at_sell: null\n  }\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 200],
+      "id": "calculate-shares-to-buy",
+      "name": "Calculate Monday Buys"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO weekly_positions (symbol, date, shares_bought, shares_sold, buy_price, sell_price, conviction_at_buy, conviction_at_sell)\nVALUES ('{{ $json.symbol }}', '{{ $json.date }}', \n        {{ $json.shares_bought ?? 0 }}, \n        {{ $json.shares_sold ?? 0 }},\n        {{ $json.buy_price ?? 'NULL' }},\n        {{ $json.sell_price ?? 'NULL' }},\n        {{ $json.conviction_at_buy ?? 'NULL' }},\n        {{ $json.conviction_at_sell ?? 'NULL' }}\n       );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1800, 200],
+      "id": "record-monday-buys",
+      "name": "Record Monday Buys",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 2-4"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400],
+      "id": "weekly-trigger-midweek",
+      "name": "Tue-Thu 10 AM - Check Convictions"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT wp.symbol\nFROM weekly_positions wp\nWHERE wp.date >= date_trunc('week', (NOW() AT TIME ZONE 'America/Chicago')::DATE)\n  AND (SELECT SUM(shares_bought) - SUM(shares_sold) FROM weekly_positions WHERE symbol = wp.symbol AND date >= date_trunc('week', (NOW() AT TIME ZONE 'America/Chicago')::DATE)) > 0\n  AND wp.symbol != 'USDW';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [400, 400],
+      "id": "get-current-holdings",
+      "name": "Get Current Week Holdings",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  '{{ $json.symbol }}' as symbol,\n  COALESCE(tb.conviction, 0) as current_conviction\nFROM ticker_buys tb\nWHERE tb.symbol = '{{ $json.symbol }}'\n  AND tb.last_updated >= now() - interval '24 hours'\nUNION ALL\nSELECT '{{ $json.symbol }}' as symbol, 0 as current_conviction\nWHERE NOT EXISTS (\n  SELECT 1 FROM ticker_buys tb2 \n  WHERE tb2.symbol = '{{ $json.symbol }}' \n    AND tb2.last_updated >= now() - interval '24 hours'\n)\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [600, 400],
+      "id": "check-convictions",
+      "name": "Check Current Convictions",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter for symbols with conviction = 0 (need to sell)\nconst symbolsToSell = items.filter(item => item.json.current_conviction === 0);\n\nif (symbolsToSell.length === 0) {\n  // No positions to sell, return empty to stop workflow\n  return [];\n}\n\nreturn symbolsToSell;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "id": "filter-zero-conviction",
+      "name": "Filter Zero Conviction Positions"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  '{{ $json.symbol }}' as symbol,\n  SUM(shares_bought) - SUM(shares_sold) as net_position,\n  dp.price_close\nFROM weekly_positions wp, daily_prices dp\nWHERE wp.symbol = '{{ $json.symbol }}'\n  AND wp.date >= date_trunc('week', (NOW() AT TIME ZONE 'America/Chicago')::DATE)\n  AND dp.symbol = '{{ $json.symbol }}'\n  AND dp.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE\nGROUP BY wp.symbol, dp.price_close\nHAVING SUM(shares_bought) - SUM(shares_sold) > 0;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1000, 400],
+      "id": "get-position-and-price",
+      "name": "Get Position Size and Price",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().split('T')[0];\nlet totalCashFromSales = 0;\n\nconst results = items.map(item => {\n  const sharesToSell = item.json.net_position;\n  const saleAmount = sharesToSell * item.json.price_close;\n  totalCashFromSales += saleAmount;\n  \n  return {\n    json: {\n      symbol: item.json.symbol,\n      date: today,\n      shares_sold: sharesToSell,\n      sell_price: item.json.price_close,\n      conviction_at_sell: 0\n    }\n  };\n});\n\n// Add USDW to reflect cash from sales\nif (totalCashFromSales > 0) {\n  results.push({\n    json: {\n      symbol: 'USDW',\n      date: today,\n      shares_bought: totalCashFromSales,\n      buy_price: 1.0,\n      conviction_at_buy: 0\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400],
+      "id": "calculate-midweek-sales",
+      "name": "Calculate Midweek Sales"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO weekly_positions (symbol, date, shares_bought, shares_sold, buy_price, sell_price, conviction_at_buy, conviction_at_sell)\nVALUES ('{{ $json.symbol }}', '{{ $json.date }}', \n        {{ $json.shares_bought ?? 0 }}, \n        {{ $json.shares_sold ?? 0 }},\n        {{ $json.buy_price ?? 'NULL' }},\n        {{ $json.sell_price ?? 'NULL' }},\n        {{ $json.conviction_at_buy ?? 'NULL' }},\n        {{ $json.conviction_at_sell ?? 'NULL' }}\n       );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1400, 400],
+      "id": "record-midweek-sales",
+      "name": "Record Midweek Sales",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 16 * * 5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 600],
+      "id": "weekly-trigger-friday",
+      "name": "Friday 4 PM - Week End"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  wp.symbol,\n  SUM(wp.shares_bought) - SUM(wp.shares_sold) as net_position,\n  dp.price_close\nFROM weekly_positions wp\nJOIN daily_prices dp ON wp.symbol = dp.symbol \n  AND dp.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE\nWHERE wp.date >= date_trunc('week', (NOW() AT TIME ZONE 'America/Chicago')::DATE)\n  AND wp.symbol != 'USDW'\nGROUP BY wp.symbol, dp.price_close\nHAVING SUM(wp.shares_bought) - SUM(wp.shares_sold) > 0;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [400, 600],
+      "id": "get-friday-positions",
+      "name": "Get All Friday Positions",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().split('T')[0];\nlet totalCashFromSales = 0;\n\nconst results = items.map(item => {\n  const sharesToSell = item.json.net_position;\n  const saleAmount = sharesToSell * item.json.price_close;\n  totalCashFromSales += saleAmount;\n  \n  return {\n    json: {\n      symbol: item.json.symbol,\n      date: today,\n      shares_sold: sharesToSell,\n      sell_price: item.json.price_close,\n      conviction_at_sell: null // Friday sells regardless of conviction\n    }\n  };\n});\n\n// Add USDW to reflect all cash from week-end sales\nif (totalCashFromSales > 0) {\n  results.push({\n    json: {\n      symbol: 'USDW',\n      date: today,\n      shares_bought: totalCashFromSales,\n      buy_price: 1.0,\n      conviction_at_buy: 0\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 600],
+      "id": "calculate-friday-sales",
+      "name": "Calculate Friday Sales"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO weekly_positions (symbol, date, shares_bought, shares_sold, buy_price, sell_price, conviction_at_buy, conviction_at_sell)\nVALUES ('{{ $json.symbol }}', '{{ $json.date }}', \n        {{ $json.shares_bought ?? 0 }}, \n        {{ $json.shares_sold ?? 0 }},\n        {{ $json.buy_price ?? 'NULL' }},\n        {{ $json.sell_price ?? 'NULL' }},\n        {{ $json.conviction_at_buy ?? 'NULL' }},\n        {{ $json.conviction_at_sell ?? 'NULL' }}\n       );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [800, 600],
+      "id": "record-friday-sales",
+      "name": "Record Friday Sales",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Monday 9 AM - Week Start": {
+      "main": [
+        [
+          {
+            "node": "Create weekly_positions Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create weekly_positions Table": {
+      "main": [
+        [
+          {
+            "node": "Seed USDW Cash if New Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed USDW Cash if New Table": {
+      "main": [
+        [
+          {
+            "node": "Get USDW Cash Available",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get USDW Cash Available": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Conviction Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Conviction Scores": {
+      "main": [
+        [
+          {
+            "node": "Calculate Position Sizes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Position Sizes": {
+      "main": [
+        [
+          {
+            "node": "Get Monday Open Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Monday Open Prices": {
+      "main": [
+        [
+          {
+            "node": "Calculate Monday Buys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Monday Buys": {
+      "main": [
+        [
+          {
+            "node": "Record Monday Buys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tue-Thu 10 AM - Check Convictions": {
+      "main": [
+        [
+          {
+            "node": "Get Current Week Holdings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Week Holdings": {
+      "main": [
+        [
+          {
+            "node": "Check Current Convictions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Current Convictions": {
+      "main": [
+        [
+          {
+            "node": "Filter Zero Conviction Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Zero Conviction Positions": {
+      "main": [
+        [
+          {
+            "node": "Get Position Size and Price",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Position Size and Price": {
+      "main": [
+        [
+          {
+            "node": "Calculate Midweek Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Midweek Sales": {
+      "main": [
+        [
+          {
+            "node": "Record Midweek Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Friday 4 PM - Week End": {
+      "main": [
+        [
+          {
+            "node": "Get All Friday Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Friday Positions": {
+      "main": [
+        [
+          {
+            "node": "Calculate Friday Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Friday Sales": {
+      "main": [
+        [
+          {
+            "node": "Record Friday Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "weekly-strategy",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "weekly-strategy",
+  "tags": []
+}

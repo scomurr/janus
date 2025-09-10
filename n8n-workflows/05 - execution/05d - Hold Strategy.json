@@ -1,0 +1,252 @@
+{
+  "name": "05d - Hold Strategy",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 200],
+      "id": "hold-trigger-monday",
+      "name": "Monday 9 AM - Rebalance Portfolio"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS hold_positions (\n  id SERIAL PRIMARY KEY,\n  symbol TEXT NOT NULL,\n  date DATE NOT NULL,\n  shares_bought DECIMAL(15,6) DEFAULT 0,\n  shares_sold DECIMAL(15,6) DEFAULT 0,\n  buy_price DECIMAL(15,6),\n  sell_price DECIMAL(15,6),\n  conviction_at_buy DECIMAL(5,2),\n  conviction_at_sell DECIMAL(5,2),\n  rebalance_reason TEXT,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [400, 200],
+      "id": "create-hold-positions-table",
+      "name": "Create hold_positions Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DO $$\nBEGIN\n  IF NOT EXISTS (SELECT 1 FROM hold_positions WHERE symbol = 'USDH') THEN\n    INSERT INTO hold_positions (symbol, date, shares_bought, conviction_at_buy, rebalance_reason, created_at)\n    VALUES ('USDH', '2024-09-08', 1000.00, 0, 'Initial seed capital', NOW());\n  END IF;\nEND $$;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [600, 200],
+      "id": "seed-usdh-cash",
+      "name": "Seed USDH Cash if New Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  hp.symbol,\n  (SUM(hp.shares_bought) - SUM(hp.shares_sold)) as net_shares,\n  CASE \n    WHEN hp.symbol = 'USDH' THEN (SUM(hp.shares_bought) - SUM(hp.shares_sold))\n    ELSE (SUM(hp.shares_bought) - SUM(hp.shares_sold)) * COALESCE(pr.price_close, pr.price_open, 1.0)\n  END as current_value\nFROM hold_positions hp\nLEFT JOIN daily_prices pr ON hp.symbol = pr.symbol AND pr.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE\nGROUP BY hp.symbol, pr.price_close, pr.price_open\nHAVING (SUM(hp.shares_bought) - SUM(hp.shares_sold)) != 0\nORDER BY hp.symbol;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [800, 200],
+      "id": "get-current-portfolio",
+      "name": "Get Current Portfolio Values",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT symbol, conviction\nFROM ticker_buys\nWHERE last_updated >= now() - interval '24 hours'\n  AND conviction > 0\nORDER BY symbol;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1000, 200],
+      "id": "get-conviction-scores",
+      "name": "Get Latest Conviction Scores",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const currentPortfolio = $('Get Current Portfolio Values').all();\nconst convictionScores = $('Get Latest Conviction Scores').all();\n\n// Calculate total portfolio value\nlet totalPortfolioValue = 0;\nconst currentHoldings = {};\n\ncurrentPortfolio.forEach(position => {\n  const symbol = position.json.symbol;\n  const value = parseFloat(position.json.current_value) || 0;\n  totalPortfolioValue += value;\n  currentHoldings[symbol] = {\n    shares: parseFloat(position.json.net_shares) || 0,\n    currentValue: value,\n    currentAllocation: 0 // Will calculate after total is known\n  };\n});\n\n// Calculate current allocations as percentages\nObject.keys(currentHoldings).forEach(symbol => {\n  if (totalPortfolioValue > 0) {\n    currentHoldings[symbol].currentAllocation = currentHoldings[symbol].currentValue / totalPortfolioValue;\n  }\n});\n\n// Calculate target allocations based on conviction scores\nconst totalConviction = convictionScores.reduce((sum, ticker) => sum + ticker.json.conviction, 0);\nconst targetAllocations = {};\nconst rebalanceTrades = [];\n\nif (totalConviction > 0) {\n  // Calculate target allocations for all conviction-based assets\n  convictionScores.forEach(ticker => {\n    const symbol = ticker.json.symbol;\n    const targetAllocation = ticker.json.conviction / totalConviction;\n    const targetValue = targetAllocation * totalPortfolioValue;\n    const currentValue = currentHoldings[symbol] ? currentHoldings[symbol].currentValue : 0;\n    const delta = targetValue - currentValue;\n    const deltaPercent = totalPortfolioValue > 0 ? Math.abs(delta) / totalPortfolioValue : 0;\n    \n    targetAllocations[symbol] = {\n      conviction: ticker.json.conviction,\n      targetAllocation: targetAllocation,\n      targetValue: targetValue,\n      currentValue: currentValue,\n      delta: delta,\n      deltaPercent: deltaPercent\n    };\n    \n    // Only rebalance if delta is > 5% of total portfolio\n    if (deltaPercent > 0.05) {\n      rebalanceTrades.push({\n        symbol: symbol,\n        action: delta > 0 ? 'buy' : 'sell',\n        targetValue: targetValue,\n        currentValue: currentValue,\n        deltaValue: Math.abs(delta),\n        conviction: ticker.json.conviction,\n        reason: `Rebalance: ${(targetAllocation * 100).toFixed(1)}% target vs ${((currentValue / totalPortfolioValue) * 100).toFixed(1)}% current`\n      });\n    }\n  });\n}\n\n// Check for assets that need to be sold (conviction dropped to 0)\nObject.keys(currentHoldings).forEach(symbol => {\n  if (symbol !== 'USDH' && !targetAllocations[symbol] && currentHoldings[symbol].currentValue > 0) {\n    // Asset no longer has conviction, sell it all\n    rebalanceTrades.push({\n      symbol: symbol,\n      action: 'sell',\n      targetValue: 0,\n      currentValue: currentHoldings[symbol].currentValue,\n      deltaValue: currentHoldings[symbol].currentValue,\n      conviction: 0,\n      reason: 'Sell all: conviction dropped to 0'\n    });\n  }\n});\n\n// Return rebalancing trades\nif (rebalanceTrades.length === 0) {\n  return []; // No rebalancing needed\n}\n\nreturn rebalanceTrades.map(trade => ({ json: trade }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "id": "calculate-rebalance-trades",
+      "name": "Calculate Rebalancing Trades"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  '{{ $json.symbol }}' as symbol,\n  '{{ $json.action }}' as action,\n  {{ $json.deltaValue }} as delta_value,\n  {{ $json.conviction }} as conviction,\n  dp.price_open,\n  dp.price_close\nFROM daily_prices dp\nWHERE dp.symbol = '{{ $json.symbol }}'\n  AND dp.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE\nUNION ALL\nSELECT '{{ $json.symbol }}' as symbol, '{{ $json.action }}' as action, {{ $json.deltaValue }} as delta_value, {{ $json.conviction }} as conviction, 1.0 as price_open, 1.0 as price_close\nWHERE '{{ $json.symbol }}' = 'USDH'\nLIMIT 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1400, 200],
+      "id": "get-rebalance-prices",
+      "name": "Get Prices for Rebalancing",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().split('T')[0];\nconst trades = [];\nlet totalCashNeeded = 0;\nlet totalCashFromSales = 0;\n\nitems.forEach(item => {\n  const symbol = item.json.symbol;\n  const action = item.json.action;\n  const deltaValue = parseFloat(item.json.delta_value);\n  const conviction = parseFloat(item.json.conviction);\n  const price = parseFloat(item.json.price_open) || 1.0;\n  \n  if (action === 'buy') {\n    // Calculate shares to buy\n    const sharesToBuy = Math.floor((deltaValue / price) * 10000) / 10000;\n    const actualCost = sharesToBuy * price;\n    totalCashNeeded += actualCost;\n    \n    trades.push({\n      json: {\n        symbol: symbol,\n        date: today,\n        shares_bought: sharesToBuy,\n        shares_sold: null,\n        buy_price: price,\n        sell_price: null,\n        conviction_at_buy: conviction,\n        conviction_at_sell: null,\n        rebalance_reason: `Buy for rebalancing: ${conviction} conviction`\n      }\n    });\n  } else if (action === 'sell') {\n    // Calculate shares to sell based on dollar value\n    const sharesToSell = Math.floor((deltaValue / price) * 10000) / 10000;\n    const actualProceeds = sharesToSell * price;\n    totalCashFromSales += actualProceeds;\n    \n    trades.push({\n      json: {\n        symbol: symbol,\n        date: today,\n        shares_bought: null,\n        shares_sold: sharesToSell,\n        buy_price: null,\n        sell_price: price,\n        conviction_at_buy: null,\n        conviction_at_sell: conviction,\n        rebalance_reason: conviction === 0 ? 'Sell all: zero conviction' : `Sell for rebalancing: ${conviction} conviction`\n      }\n    });\n  }\n});\n\n// Handle cash rebalancing\nconst netCashChange = totalCashFromSales - totalCashNeeded;\n\nif (netCashChange > 0) {\n  // More cash from sales, add to USDH\n  trades.push({\n    json: {\n      symbol: 'USDH',\n      date: today,\n      shares_bought: netCashChange,\n      shares_sold: null,\n      buy_price: 1.0,\n      sell_price: null,\n      conviction_at_buy: 0,\n      conviction_at_sell: null,\n      rebalance_reason: 'Cash from rebalancing sales'\n    }\n  });\n} else if (netCashChange < 0) {\n  // Need more cash, sell from USDH\n  trades.push({\n    json: {\n      symbol: 'USDH',\n      date: today,\n      shares_bought: null,\n      shares_sold: Math.abs(netCashChange),\n      buy_price: null,\n      sell_price: 1.0,\n      conviction_at_buy: null,\n      conviction_at_sell: 0,\n      rebalance_reason: 'Cash for rebalancing purchases'\n    }\n  });\n}\n\nreturn trades;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 200],
+      "id": "execute-rebalance-trades",
+      "name": "Execute Rebalancing Trades"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO hold_positions (symbol, date, shares_bought, shares_sold, buy_price, sell_price, conviction_at_buy, conviction_at_sell, rebalance_reason)\nVALUES ('{{ $json.symbol }}', '{{ $json.date }}', \n        {{ $json.shares_bought ?? 0 }}, \n        {{ $json.shares_sold ?? 0 }},\n        {{ $json.buy_price ?? 'NULL' }},\n        {{ $json.sell_price ?? 'NULL' }},\n        {{ $json.conviction_at_buy ?? 'NULL' }},\n        {{ $json.conviction_at_sell ?? 'NULL' }},\n        '{{ $json.rebalance_reason }}'\n       );",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1800, 200],
+      "id": "record-rebalance-trades",
+      "name": "Record Rebalancing Trades",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Monday 9 AM - Rebalance Portfolio": {
+      "main": [
+        [
+          {
+            "node": "Create hold_positions Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create hold_positions Table": {
+      "main": [
+        [
+          {
+            "node": "Seed USDH Cash if New Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed USDH Cash if New Table": {
+      "main": [
+        [
+          {
+            "node": "Get Current Portfolio Values",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Portfolio Values": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Conviction Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Conviction Scores": {
+      "main": [
+        [
+          {
+            "node": "Calculate Rebalancing Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Rebalancing Trades": {
+      "main": [
+        [
+          {
+            "node": "Get Prices for Rebalancing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prices for Rebalancing": {
+      "main": [
+        [
+          {
+            "node": "Execute Rebalancing Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Rebalancing Trades": {
+      "main": [
+        [
+          {
+            "node": "Record Rebalancing Trades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "hold-strategy",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "hold-strategy",
+  "tags": []
+}

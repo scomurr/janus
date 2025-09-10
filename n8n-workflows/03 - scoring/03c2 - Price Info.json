@@ -1,0 +1,202 @@
+{
+  "name": "03c2 - Price Info",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "TRUNCATE TABLE daily_prices;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [200, 200],
+      "id": "truncate-price-table",
+      "name": "Clear Price Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "target_date",
+              "value": "{{ (new Date()).toISOString().split('T')[0] }}"
+            },
+            {
+              "name": "price_type",
+              "value": "close"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [400, 200],
+      "id": "set-date-and-type",
+      "name": "Set Date and Price Type"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT symbol FROM ticker_buys WHERE symbol NOT IN ('USDD', 'USDW', 'USDH') ORDER BY symbol;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [600, 200],
+      "id": "get-active-tickers",
+      "name": "Get Active Tickers",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/{{ $json.symbol }}?range=2d&interval=1d&includePrePost=false",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, 200],
+      "id": "fetch-yahoo-prices",
+      "name": "Fetch Yahoo Finance Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "const targetDate = $('Set Date and Price Type').first().json.target_date;\nconst priceType = $('Set Date and Price Type').first().json.price_type;\n\nconst results = [];\n\nitems.forEach(item => {\n  const symbol = item.json.symbol;\n  const yahooData = item.json;\n  \n  if (!yahooData || !yahooData.chart || !yahooData.chart.result || yahooData.chart.result.length === 0) {\n    console.log(`No data for ${symbol}`);\n    return;\n  }\n  \n  const result = yahooData.chart.result[0];\n  const timestamps = result.timestamp || [];\n  const indicators = result.indicators;\n  \n  if (!indicators || !indicators.quote || indicators.quote.length === 0) {\n    console.log(`No quote data for ${symbol}`);\n    return;\n  }\n  \n  const quote = indicators.quote[0];\n  const opens = quote.open || [];\n  const closes = quote.close || [];\n  const highs = quote.high || [];\n  const lows = quote.low || [];\n  const volumes = quote.volume || [];\n  \n  // Find the data for our target date\n  for (let i = 0; i < timestamps.length; i++) {\n    const date = new Date(timestamps[i] * 1000);\n    const dateStr = date.toISOString().split('T')[0];\n    \n    if (dateStr === targetDate) {\n      const priceData = {\n        symbol: symbol,\n        date: targetDate,\n        price_open: opens[i] || null,\n        price_close: closes[i] || null,\n        price_high: highs[i] || null,\n        price_low: lows[i] || null,\n        volume: volumes[i] || null,\n        price_type: priceType,\n        fetched_at: new Date().toISOString()\n      };\n      \n      results.push({ json: priceData });\n      break;\n    }\n  }\n});\n\nconsole.log(`Processed ${results.length} price records for ${targetDate}`);\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 200],
+      "id": "process-price-data",
+      "name": "Process Price Data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO daily_prices (symbol, date, price_open, price_close, price_high, price_low, volume, created_at, updated_at)\nVALUES (\n  '{{ $json.symbol }}',\n  '{{ $json.date }}',\n  {{ $json.price_open ?? 'NULL' }},\n  {{ $json.price_close ?? 'NULL' }},\n  {{ $json.price_high ?? 'NULL' }},\n  {{ $json.price_low ?? 'NULL' }},\n  {{ $json.volume ?? 'NULL' }},\n  NOW(),\n  NOW()\n)\nON CONFLICT (symbol, date)\nDO UPDATE SET\n  price_open = CASE \n    WHEN '{{ $('Set Date and Price Type').first().json.price_type }}' IN ('open', 'all') \n    THEN {{ $json.price_open ?? 'EXCLUDED.price_open' }}\n    ELSE daily_prices.price_open\n  END,\n  price_close = CASE \n    WHEN '{{ $('Set Date and Price Type').first().json.price_type }}' IN ('close', 'all') \n    THEN {{ $json.price_close ?? 'EXCLUDED.price_close' }}\n    ELSE daily_prices.price_close\n  END,\n  price_high = CASE \n    WHEN '{{ $('Set Date and Price Type').first().json.price_type }}' IN ('all') \n    THEN {{ $json.price_high ?? 'EXCLUDED.price_high' }}\n    ELSE GREATEST(daily_prices.price_high, {{ $json.price_high ?? 'daily_prices.price_high' }})\n  END,\n  price_low = CASE \n    WHEN '{{ $('Set Date and Price Type').first().json.price_type }}' IN ('all') \n    THEN {{ $json.price_low ?? 'EXCLUDED.price_low' }}\n    ELSE LEAST(daily_prices.price_low, {{ $json.price_low ?? 'daily_prices.price_low' }})\n  END,\n  volume = {{ $json.volume ?? 'EXCLUDED.volume' }},\n  updated_at = NOW();",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1200, 200],
+      "id": "upsert-price-data",
+      "name": "Upsert Price Data",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  symbol,\n  date,\n  price_open,\n  price_close,\n  CASE \n    WHEN price_open IS NOT NULL AND price_close IS NOT NULL THEN 'Complete'\n    WHEN price_open IS NOT NULL THEN 'Open Only'\n    WHEN price_close IS NOT NULL THEN 'Close Only'\n    ELSE 'Missing'\n  END as status\nFROM daily_prices \nWHERE date = '{{ $('Set Date and Price Type').first().json.target_date }}'\nORDER BY symbol;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1400, 200],
+      "id": "verify-price-data",
+      "name": "Verify Price Data",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Clear Price Table": {
+      "main": [
+        [
+          {
+            "node": "Set Date and Price Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Date and Price Type": {
+      "main": [
+        [
+          {
+            "node": "Get Active Tickers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Tickers": {
+      "main": [
+        [
+          {
+            "node": "Fetch Yahoo Finance Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Yahoo Finance Data": {
+      "main": [
+        [
+          {
+            "node": "Process Price Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Price Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert Price Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Price Data": {
+      "main": [
+        [
+          {
+            "node": "Verify Price Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "price-info-parameterized",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "price-info-parameterized",
+  "tags": []
+}

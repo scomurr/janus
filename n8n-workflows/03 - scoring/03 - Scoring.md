@@ -1,7 +1,17 @@
-Summary
- - runs every Sunday at 8AM and analyzes filtered ticker data using multiple AI models to generate investment scores and recommendations
+# 03 - Scoring Workflows
 
-** Filtering Criteria (Trading Terms) **
+## Overview
+The scoring phase consists of multiple workflows that generate and manage investment recommendations:
+- **03a - Scoring**: AI-powered analysis and scoring of filtered tickers
+- **03b - Update Conviction Scores (manual)**: Manual entry of conviction scores (current)
+- **03b - Update Conviction Scores (AI)**: AI-powered conviction scoring (in development)
+
+## 03a - Scoring
+**Purpose**: Analyzes filtered ticker data using multiple AI models to generate investment scores and recommendations
+
+**Trigger**: Sunday at 8:00 AM Central
+
+**Filtering Criteria (Trading Terms)**:
 - Small-cap stocks only: Market cap under $300 million
 - Profitable companies: Must have positive revenue and gross margins
 - Liquid stocks: Daily volume above 10,000 shares
@@ -11,47 +21,72 @@ Summary
 - Revenue efficiency: Revenue must be at least 1% of market cap (excludes shell companies)
 - Trading liquidity: Daily volume must exceed market cap ÷ 1000 (ensures adequate liquidity)
 
-Trigger
- - Sunday at 8AM
+**Multi-Model AI Analysis**:
+- **OpenAI GPT-4o-latest**: Primary analysis model
+- **Google Gemini 2.5 Flash**: Parallel validation analysis
+- **Ollama (Local)**: Local model for additional perspective
 
-Create Table if Missing
- - creates ticker_scores table if it doesn't exist
+## 03b - Update Conviction Scores (manual)
+**Purpose**: Manually set conviction scores for portfolio allocation
 
-Execute a SQL query
- - filters ticker_universe with investment criteria and orders by market cap ascending
+**Trigger**: Manual execution as needed
 
-OpenAI
- - sends filtered ticker data to OpenAI for analysis using GPT-4o-latest model
+**Process**:
+- Creates/updates ticker_buys table with enhanced schema
+- Preserves historical conviction data (original_conviction, last_conviction)
+- Fills thesis from ticker_scores where missing
+- Updates conviction scores via manual code block entry
 
-Gemini
- - sends same ticker data to Google Gemini 2.5 Flash for parallel analysis
+## 03b - Update Conviction Scores (AI) 
+**Purpose**: AI-powered conviction scoring (in development - will replace manual process)
 
-OpenAI Chat Model
- - configures OpenAI GPT-4o-latest connection
+**Status**: Under development - intended to automate the conviction scoring process
 
-Google Gemini Chat Model
- - configures Google Gemini API connection
+## Workflow Components
 
-Basic LLM Chain
- - processes ticker data through Ollama local model
+### 03a - Scoring Workflow
+**Create Table if Missing**
+- Creates ticker_scores table if it doesn't exist
+- Schema includes symbol, score, recommendation, reason, model_source
 
-Ollama Chat Model
- - configures local Ollama model connection
+**Execute a SQL query**
+- Filters ticker_universe with investment criteria and orders by market cap ascending
+- Applies all filtering criteria to identify viable small-cap candidates
 
-Parse OpenAI Response
- - extracts JSON response from OpenAI containing score, recommendation, and reason
+**AI Model Configuration**:
+- **OpenAI Chat Model**: Configures OpenAI GPT-4o-latest connection
+- **Google Gemini Chat Model**: Configures Google Gemini API connection  
+- **Ollama Chat Model**: Configures local Ollama model connection
 
-Parse Gemini Response
- - extracts JSON response from Google Gemini
+**AI Analysis Execution**:
+- **OpenAI**: Sends filtered ticker data to OpenAI for analysis using GPT-4o-latest model
+- **Gemini**: Sends same ticker data to Google Gemini 2.5 Flash for parallel analysis
+- **Basic LLM Chain**: Processes ticker data through Ollama local model
 
-Parse Llama3 Response
- - extracts JSON response from local Ollama model
+**Response Processing**:
+- **Parse OpenAI Response**: Extracts JSON response from OpenAI containing score, recommendation, and reason
+- **Parse Gemini Response**: Extracts JSON response from Google Gemini
+- **Parse Llama3 Response**: Extracts JSON response from local Ollama model
 
-Insert into Ticker Scores
- - saves the AI-generated scores and recommendations to ticker_scores table
+**Data Storage**:
+- **Insert into Ticker Scores**: Saves the AI-generated scores and recommendations to ticker_scores table
 
-Error Trigger
- - catches any workflow errors
+**Error Handling**:
+- **Error Trigger**: Catches any workflow errors
+- **Discord**: Sends error notifications to Discord if workflow fails
 
-Discord
- - sends error notifications to Discord if workflow fails
+### 03b - Update Conviction Scores (manual) Workflow
+**Create Enhanced Table**
+- Creates/updates ticker_buys table with enhanced schema
+- Includes: symbol, conviction, thesis, original_conviction, last_conviction
+
+**Preserve Historical Data**:
+- **Fill Thesis from Ticker Scores**: Copies reason from ticker_scores into empty thesis fields
+- **Preserve Conviction History**: Moves current conviction to last_conviction, sets original_conviction
+
+**Manual Score Entry**:
+- **Conviction Scores**: JavaScript code block for manual entry of conviction scores
+- **Update Conviction Scores**: Updates ticker_buys table with new conviction values
+
+### 03b - Update Conviction Scores (AI) Workflow
+**Status**: In development - intended to replace manual conviction scoring process with AI-driven analysis

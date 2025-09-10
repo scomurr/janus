@@ -162,120 +162,846 @@ app.get("/api/ticker/:symbol/prompt", async (req, res) => {
   }
 });
 
-// 3) Get daily portfolio valuation data
-app.get("/api/portfolio/valuations", async (_req, res) => {
+// Removed old portfolio APIs - each strategy now has its own endpoints:
+// - Daily: /api/daily/* (implemented)
+// - Hold: /api/hold/* (future)  
+// - Weekly: /api/weekly/* (future)
+
+// === DAILY STRATEGY API ENDPOINTS ===
+
+// 1) Get daily strategy current status
+app.get("/api/daily/status", async (_req, res) => {
   try {
+    const today = new Date().toISOString().split('T')[0];
+    
     const q = `
-      SELECT date, symbol, value_close
-      FROM daily_valuation
-      WHERE value_close IS NOT NULL
-      ORDER BY date ASC
+      SELECT 
+        symbol,
+        SUM(shares_bought) as total_bought,
+        SUM(shares_sold) as total_sold,
+        (SUM(shares_bought) - SUM(shares_sold)) as net_position,
+        MAX(updated_at) as last_updated
+      FROM daily_positions
+      WHERE date = $1
+      GROUP BY symbol
+      ORDER BY symbol
     `;
-    const { rows } = await pool.query(q);
     
-    console.log(`Found ${rows.length} rows in daily_valuation table`);
+    const { rows } = await pool.query(q, [today]);
     
-    if (rows.length === 0) {
-      return res.json({
-        portfolioTotals: [],
-        assetData: {},
-        symbols: [],
-        message: "No data found in daily_valuation table"
-      });
-    }
+    const positions = rows.map(row => ({
+      symbol: row.symbol,
+      totalBought: parseFloat(row.total_bought) || 0,
+      totalSold: parseFloat(row.total_sold) || 0,
+      netPosition: parseFloat(row.net_position) || 0,
+      lastUpdated: row.last_updated
+    }));
     
-    // Aggregate data by date for totals and by symbol for individual assets
-    const byDate = {};
-    const bySymbol = {};
-    const symbols = new Set();
-    
-    rows.forEach(row => {
-      const dateStr = row.date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      const symbol = row.symbol;
-      const value = parseFloat(row.value_close) || 0;
-      
-      symbols.add(symbol);
-      
-      // Aggregate by date (portfolio total)
-      if (!byDate[dateStr]) {
-        byDate[dateStr] = { date: dateStr, total: 0 };
-      }
-      byDate[dateStr].total += value;
-      
-      // Aggregate by symbol
-      if (!bySymbol[symbol]) {
-        bySymbol[symbol] = [];
-      }
-      bySymbol[symbol].push({ date: dateStr, value });
-    });
-    
-    // Convert to arrays for easier frontend consumption
-    const portfolioTotals = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
-    const assetData = {};
-    
-    Array.from(symbols).forEach(symbol => {
-      assetData[symbol] = bySymbol[symbol].sort((a, b) => a.date.localeCompare(b.date));
-    });
-    
-    console.log(`Returning data for ${symbols.size} symbols, ${portfolioTotals.length} dates`);
+    const cashPosition = positions.find(p => p.symbol === 'USDD');
+    const equityPositions = positions.filter(p => p.symbol !== 'USDD');
     
     res.json({
-      portfolioTotals,
-      assetData,
-      symbols: Array.from(symbols).sort()
+      date: today,
+      cashPosition: cashPosition || { symbol: 'USDD', netPosition: 0 },
+      equityPositions,
+      totalPositions: equityPositions.length
     });
   } catch (err) {
-    console.error("GET /api/portfolio/valuations error:", err);
-    res.status(500).json({ 
-      error: "query_failed", 
-      message: err.message,
-      details: "Check server logs for more information"
-    });
+    console.error("GET /api/daily/status error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
   }
 });
 
-// 4) Get current day portfolio summary
-app.get("/api/portfolio/current", async (_req, res) => {
+// 2) Get daily strategy performance over time
+app.get("/api/daily/performance", async (_req, res) => {
   try {
     const q = `
-      SELECT symbol, value_close, date
-      FROM daily_valuation
-      WHERE date = (SELECT MAX(date) FROM daily_valuation)
-        AND value_close IS NOT NULL
-      ORDER BY symbol ASC
+      SELECT 
+        dp.date,
+        dp.symbol,
+        dp.shares_bought,
+        dp.shares_sold,
+        COALESCE(pr.price_open, 0) as price_open,
+        COALESCE(pr.price_close, 0) as price_close,
+        (dp.shares_bought - COALESCE(dp.shares_sold, 0)) as net_shares,
+        CASE 
+          WHEN dp.symbol = 'USDD' THEN (dp.shares_bought - COALESCE(dp.shares_sold, 0))
+          ELSE (dp.shares_bought - COALESCE(dp.shares_sold, 0)) * COALESCE(pr.price_close, 0)
+        END as current_value
+      FROM daily_positions dp
+      LEFT JOIN daily_prices pr ON dp.symbol = pr.symbol AND dp.date = pr.date
+      WHERE dp.shares_bought > 0 OR dp.shares_sold > 0
+      ORDER BY dp.date ASC, dp.symbol ASC
     `;
+    
     const { rows } = await pool.query(q);
     
-    console.log(`Found ${rows.length} current portfolio entries`);
+    const portfolioByDate = {};
+    const assetData = {};
+    const allSymbols = new Set();
     
-    if (rows.length === 0) {
-      return res.json({
-        assets: [],
-        total: 0,
-        date: null,
-        message: "No current portfolio data found"
+    rows.forEach(row => {
+      const dateStr = row.date.toISOString().split('T')[0];
+      const symbol = row.symbol;
+      const value = parseFloat(row.current_value) || 0;
+      const netShares = parseFloat(row.net_shares) || 0;
+      
+      // Track all symbols that have ever been traded
+      if (symbol !== 'USDD') {
+        allSymbols.add(symbol);
+      }
+      
+      // Portfolio totals by date (only count positions we currently hold)
+      if (netShares !== 0) {
+        if (!portfolioByDate[dateStr]) {
+          portfolioByDate[dateStr] = { date: dateStr, total: 0 };
+        }
+        portfolioByDate[dateStr].total += value;
+      }
+      
+      // Individual asset data (include all trading activity)
+      if (symbol !== 'USDD') {
+        if (!assetData[symbol]) {
+          assetData[symbol] = [];
+        }
+        
+        // Calculate cumulative P&L for this asset up to this date
+        const buyValue = (parseFloat(row.shares_bought) || 0) * (parseFloat(row.price_open) || 0);
+        const sellValue = (parseFloat(row.shares_sold) || 0) * (parseFloat(row.price_close) || 0);
+        const dailyPnL = sellValue - buyValue;
+        
+        assetData[symbol].push({
+          date: dateStr,
+          value: value,
+          shares: netShares,
+          sharesBought: parseFloat(row.shares_bought) || 0,
+          sharesSold: parseFloat(row.shares_sold) || 0,
+          buyValue: buyValue,
+          sellValue: sellValue,
+          dailyPnL: dailyPnL,
+          priceOpen: parseFloat(row.price_open) || 0,
+          priceClose: parseFloat(row.price_close) || 0
+        });
+      }
+    });
+    
+    // Calculate cumulative P&L for each asset
+    Object.keys(assetData).forEach(symbol => {
+      let cumulativePnL = 0;
+      assetData[symbol].forEach(item => {
+        cumulativePnL += item.dailyPnL;
+        item.cumulativePnL = cumulativePnL;
       });
-    }
+    });
+    
+    res.json({
+      portfolioTotals: Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date)),
+      assetData,
+      symbols: Array.from(allSymbols).sort()
+    });
+  } catch (err) {
+    console.error("GET /api/daily/performance error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 3) Get daily strategy execution history for a specific date
+app.get("/api/daily/execution/:date", async (req, res) => {
+  try {
+    const date = req.params.date;
+    
+    const q = `
+      SELECT 
+        dp.symbol,
+        dp.shares_bought,
+        dp.shares_sold,
+        dp.created_at,
+        dp.updated_at,
+        pr.price_open,
+        pr.price_close
+      FROM daily_positions dp
+      LEFT JOIN daily_prices pr ON dp.symbol = pr.symbol AND dp.date = pr.date
+      WHERE dp.date = $1
+      ORDER BY dp.created_at ASC, dp.symbol ASC
+    `;
+    
+    const { rows } = await pool.query(q, [date]);
+    
+    const executions = rows.map(row => ({
+      symbol: row.symbol,
+      sharesBought: parseFloat(row.shares_bought) || 0,
+      sharesSold: parseFloat(row.shares_sold) || 0,
+      openPrice: parseFloat(row.price_open) || 0,
+      closePrice: parseFloat(row.price_close) || 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      buyValue: (parseFloat(row.shares_bought) || 0) * (parseFloat(row.price_open) || 0),
+      sellValue: (parseFloat(row.shares_sold) || 0) * (parseFloat(row.price_close) || 0)
+    }));
+    
+    const totalBuyValue = executions.reduce((sum, ex) => sum + ex.buyValue, 0);
+    const totalSellValue = executions.reduce((sum, ex) => sum + ex.sellValue, 0);
+    
+    res.json({
+      date,
+      executions,
+      summary: {
+        totalBuyValue,
+        totalSellValue,
+        dailyPnL: totalSellValue - totalBuyValue,
+        executionCount: executions.length
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/daily/execution/:date error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 4) Get aggregate asset performance for all assets ever traded
+app.get("/api/daily/assets", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        dp.symbol,
+        SUM(dp.shares_bought) as total_shares_bought,
+        SUM(dp.shares_sold) as total_shares_sold,
+        SUM(dp.shares_bought * COALESCE(pr_buy.price_open, 0)) as total_buy_value,
+        SUM(dp.shares_sold * COALESCE(pr_sell.price_close, 0)) as total_sell_value,
+        COUNT(DISTINCT dp.date) as trading_days,
+        MIN(dp.date) as first_trade_date,
+        MAX(dp.date) as last_trade_date,
+        (SUM(dp.shares_bought) - SUM(dp.shares_sold)) as current_position
+      FROM daily_positions dp
+      LEFT JOIN daily_prices pr_buy ON dp.symbol = pr_buy.symbol AND dp.date = pr_buy.date
+      LEFT JOIN daily_prices pr_sell ON dp.symbol = pr_sell.symbol AND dp.date = pr_sell.date
+      WHERE dp.symbol != 'USDD'
+      GROUP BY dp.symbol
+      ORDER BY dp.symbol
+    `;
+    
+    const { rows } = await pool.query(q);
     
     const assets = rows.map(row => ({
       symbol: row.symbol,
-      value: parseFloat(row.value_close) || 0
+      totalSharesBought: parseFloat(row.total_shares_bought) || 0,
+      totalSharesSold: parseFloat(row.total_shares_sold) || 0,
+      totalBuyValue: parseFloat(row.total_buy_value) || 0,
+      totalSellValue: parseFloat(row.total_sell_value) || 0,
+      netPnL: (parseFloat(row.total_sell_value) || 0) - (parseFloat(row.total_buy_value) || 0),
+      tradingDays: parseInt(row.trading_days) || 0,
+      firstTradeDate: row.first_trade_date,
+      lastTradeDate: row.last_trade_date,
+      currentPosition: parseFloat(row.current_position) || 0,
+      isCurrentlyHeld: (parseFloat(row.current_position) || 0) > 0
     }));
     
-    const total = assets.reduce((sum, asset) => sum + asset.value, 0);
+    const summary = {
+      totalAssets: assets.length,
+      currentlyHeld: assets.filter(a => a.isCurrentlyHeld).length,
+      totalBuyValue: assets.reduce((sum, a) => sum + a.totalBuyValue, 0),
+      totalSellValue: assets.reduce((sum, a) => sum + a.totalSellValue, 0),
+      totalNetPnL: assets.reduce((sum, a) => sum + a.netPnL, 0)
+    };
     
     res.json({
       assets,
-      total,
-      date: rows[0].date
+      summary
     });
   } catch (err) {
-    console.error("GET /api/portfolio/current error:", err);
-    res.status(500).json({ 
-      error: "query_failed",
-      message: err.message,
-      details: "Check server logs for more information"
+    console.error("GET /api/daily/assets error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// === WEEKLY STRATEGY API ENDPOINTS ===
+
+// 1) Get weekly strategy current status
+app.get("/api/weekly/status", async (_req, res) => {
+  try {
+    // Get current week start date (Monday)
+    const today = new Date();
+    const currentMonday = new Date(today);
+    currentMonday.setDate(today.getDate() - (today.getDay() || 7) + 1);
+    const mondayStr = currentMonday.toISOString().split('T')[0];
+    
+    const q = `
+      SELECT 
+        symbol,
+        SUM(shares_bought) as total_bought,
+        SUM(shares_sold) as total_sold,
+        (SUM(shares_bought) - SUM(shares_sold)) as net_position,
+        MAX(updated_at) as last_updated
+      FROM weekly_positions
+      WHERE date >= $1
+      GROUP BY symbol
+      ORDER BY symbol
+    `;
+    
+    const { rows } = await pool.query(q, [mondayStr]);
+    
+    const positions = rows.map(row => ({
+      symbol: row.symbol,
+      totalBought: parseFloat(row.total_bought) || 0,
+      totalSold: parseFloat(row.total_sold) || 0,
+      netPosition: parseFloat(row.net_position) || 0,
+      lastUpdated: row.last_updated
+    }));
+    
+    const cashPosition = positions.find(p => p.symbol === 'USDW');
+    const equityPositions = positions.filter(p => p.symbol !== 'USDW' && p.netPosition > 0);
+    
+    res.json({
+      weekStart: mondayStr,
+      cashPosition: cashPosition || { symbol: 'USDW', netPosition: 0 },
+      equityPositions,
+      totalPositions: equityPositions.length
     });
+  } catch (err) {
+    console.error("GET /api/weekly/status error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 2) Get weekly strategy performance over time
+app.get("/api/weekly/performance", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        wp.date,
+        wp.symbol,
+        wp.shares_bought,
+        wp.shares_sold,
+        COALESCE(wp.buy_price, 0) as buy_price,
+        COALESCE(wp.sell_price, 0) as sell_price,
+        COALESCE(pr_buy.price_open, wp.buy_price, 0) as price_open,
+        COALESCE(pr_sell.price_close, wp.sell_price, 0) as price_close
+      FROM weekly_positions wp
+      LEFT JOIN daily_prices pr_buy ON wp.symbol = pr_buy.symbol AND wp.date = pr_buy.date
+      LEFT JOIN daily_prices pr_sell ON wp.symbol = pr_sell.symbol AND wp.date = pr_sell.date
+      WHERE wp.shares_bought > 0 OR wp.shares_sold > 0
+      ORDER BY wp.date ASC, wp.symbol ASC
+    `;
+    
+    const { rows } = await pool.query(q);
+    
+    const portfolioByDate = {};
+    const assetData = {};
+    const allSymbols = new Set();
+    const assetPnL = {}; // Track cumulative P&L per asset
+    
+    rows.forEach(row => {
+      const dateStr = row.date.toISOString().split('T')[0];
+      const symbol = row.symbol;
+      
+      // Track all symbols that have ever been traded
+      if (symbol !== 'USDW') {
+        allSymbols.add(symbol);
+        
+        if (!assetPnL[symbol]) {
+          assetPnL[symbol] = 0;
+        }
+        
+        // Calculate daily P&L for this asset
+        const buyValue = (parseFloat(row.shares_bought) || 0) * (parseFloat(row.buy_price) || 0);
+        const sellValue = (parseFloat(row.shares_sold) || 0) * (parseFloat(row.sell_price) || 0);
+        const dailyPnL = sellValue - buyValue;
+        
+        assetPnL[symbol] += dailyPnL;
+        
+        if (!assetData[symbol]) {
+          assetData[symbol] = [];
+        }
+        
+        assetData[symbol].push({
+          date: dateStr,
+          sharesBought: parseFloat(row.shares_bought) || 0,
+          sharesSold: parseFloat(row.shares_sold) || 0,
+          buyValue: buyValue,
+          sellValue: sellValue,
+          dailyPnL: dailyPnL,
+          cumulativePnL: assetPnL[symbol],
+          buyPrice: parseFloat(row.buy_price) || 0,
+          sellPrice: parseFloat(row.sell_price) || 0
+        });
+      }
+    });
+    
+    // Calculate portfolio totals by date
+    Object.keys(assetData).forEach(symbol => {
+      assetData[symbol].forEach(item => {
+        if (!portfolioByDate[item.date]) {
+          portfolioByDate[item.date] = { date: item.date, total: 0 };
+        }
+        // Add to portfolio total (this will be cumulative P&L across all assets)
+        portfolioByDate[item.date].total += item.dailyPnL;
+      });
+    });
+    
+    // Convert portfolio totals to cumulative
+    const sortedDates = Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date));
+    let cumulativeTotal = 0;
+    sortedDates.forEach(item => {
+      cumulativeTotal += item.total;
+      item.total = cumulativeTotal;
+    });
+    
+    res.json({
+      portfolioTotals: sortedDates,
+      assetData,
+      symbols: Array.from(allSymbols).sort()
+    });
+  } catch (err) {
+    console.error("GET /api/weekly/performance error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 3) Get weekly strategy execution history for a specific week
+app.get("/api/weekly/execution/:date", async (req, res) => {
+  try {
+    const inputDate = new Date(req.params.date);
+    const weekStart = new Date(inputDate);
+    weekStart.setDate(inputDate.getDate() - (inputDate.getDay() || 7) + 1);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    
+    const q = `
+      SELECT 
+        wp.symbol,
+        wp.date,
+        wp.shares_bought,
+        wp.shares_sold,
+        wp.buy_price,
+        wp.sell_price,
+        wp.conviction_at_buy,
+        wp.conviction_at_sell,
+        wp.created_at,
+        wp.updated_at
+      FROM weekly_positions wp
+      WHERE wp.date >= $1 AND wp.date <= $2
+      ORDER BY wp.date ASC, wp.created_at ASC, wp.symbol ASC
+    `;
+    
+    const { rows } = await pool.query(q, [weekStartStr, weekEndStr]);
+    
+    const executions = rows.map(row => ({
+      symbol: row.symbol,
+      date: row.date.toISOString().split('T')[0],
+      sharesBought: parseFloat(row.shares_bought) || 0,
+      sharesSold: parseFloat(row.shares_sold) || 0,
+      buyPrice: parseFloat(row.buy_price) || 0,
+      sellPrice: parseFloat(row.sell_price) || 0,
+      convictionAtBuy: parseFloat(row.conviction_at_buy) || null,
+      convictionAtSell: parseFloat(row.conviction_at_sell) || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      buyValue: (parseFloat(row.shares_bought) || 0) * (parseFloat(row.buy_price) || 0),
+      sellValue: (parseFloat(row.shares_sold) || 0) * (parseFloat(row.sell_price) || 0)
+    }));
+    
+    const totalBuyValue = executions.reduce((sum, ex) => sum + ex.buyValue, 0);
+    const totalSellValue = executions.reduce((sum, ex) => sum + ex.sellValue, 0);
+    
+    res.json({
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      executions,
+      summary: {
+        totalBuyValue,
+        totalSellValue,
+        weeklyPnL: totalSellValue - totalBuyValue,
+        executionCount: executions.length
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/weekly/execution/:date error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 4) Get aggregate asset performance for all assets ever traded in weekly strategy
+app.get("/api/weekly/assets", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        wp.symbol,
+        SUM(wp.shares_bought) as total_shares_bought,
+        SUM(wp.shares_sold) as total_shares_sold,
+        SUM(wp.shares_bought * COALESCE(wp.buy_price, 0)) as total_buy_value,
+        SUM(wp.shares_sold * COALESCE(wp.sell_price, 0)) as total_sell_value,
+        COUNT(DISTINCT wp.date) as trading_days,
+        MIN(wp.date) as first_trade_date,
+        MAX(wp.date) as last_trade_date,
+        (SUM(wp.shares_bought) - SUM(wp.shares_sold)) as current_position
+      FROM weekly_positions wp
+      WHERE wp.symbol != 'USDW'
+      GROUP BY wp.symbol
+      ORDER BY wp.symbol
+    `;
+    
+    const { rows } = await pool.query(q);
+    
+    const assets = rows.map(row => ({
+      symbol: row.symbol,
+      totalSharesBought: parseFloat(row.total_shares_bought) || 0,
+      totalSharesSold: parseFloat(row.total_shares_sold) || 0,
+      totalBuyValue: parseFloat(row.total_buy_value) || 0,
+      totalSellValue: parseFloat(row.total_sell_value) || 0,
+      netPnL: (parseFloat(row.total_sell_value) || 0) - (parseFloat(row.total_buy_value) || 0),
+      tradingDays: parseInt(row.trading_days) || 0,
+      firstTradeDate: row.first_trade_date,
+      lastTradeDate: row.last_trade_date,
+      currentPosition: parseFloat(row.current_position) || 0,
+      isCurrentlyHeld: (parseFloat(row.current_position) || 0) > 0
+    }));
+    
+    const summary = {
+      totalAssets: assets.length,
+      currentlyHeld: assets.filter(a => a.isCurrentlyHeld).length,
+      totalBuyValue: assets.reduce((sum, a) => sum + a.totalBuyValue, 0),
+      totalSellValue: assets.reduce((sum, a) => sum + a.totalSellValue, 0),
+      totalNetPnL: assets.reduce((sum, a) => sum + a.netPnL, 0)
+    };
+    
+    res.json({
+      assets,
+      summary
+    });
+  } catch (err) {
+    console.error("GET /api/weekly/assets error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// === HOLD STRATEGY API ENDPOINTS ===
+
+// 1) Get hold strategy current status
+app.get("/api/hold/status", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        hp.symbol,
+        SUM(hp.shares_bought) as total_bought,
+        SUM(hp.shares_sold) as total_sold,
+        (SUM(hp.shares_bought) - SUM(hp.shares_sold)) as net_position,
+        MAX(hp.updated_at) as last_updated,
+        CASE 
+          WHEN hp.symbol = 'USDH' THEN (SUM(hp.shares_bought) - SUM(hp.shares_sold))
+          ELSE (SUM(hp.shares_bought) - SUM(hp.shares_sold)) * COALESCE(pr.price_close, pr.price_open, 1.0)
+        END as current_value,
+        COALESCE(pr.price_close, pr.price_open, 1.0) as current_price
+      FROM hold_positions hp
+      LEFT JOIN daily_prices pr ON hp.symbol = pr.symbol AND pr.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE
+      GROUP BY hp.symbol, pr.price_close, pr.price_open
+      HAVING (SUM(hp.shares_bought) - SUM(hp.shares_sold)) != 0
+      ORDER BY hp.symbol
+    `;
+    
+    const { rows } = await pool.query(q);
+    
+    const positions = rows.map(row => ({
+      symbol: row.symbol,
+      totalBought: parseFloat(row.total_bought) || 0,
+      totalSold: parseFloat(row.total_sold) || 0,
+      netPosition: parseFloat(row.net_position) || 0,
+      currentValue: parseFloat(row.current_value) || 0,
+      currentPrice: parseFloat(row.current_price) || 0,
+      lastUpdated: row.last_updated
+    }));
+    
+    const cashPosition = positions.find(p => p.symbol === 'USDH');
+    const equityPositions = positions.filter(p => p.symbol !== 'USDH');
+    const totalValue = positions.reduce((sum, pos) => sum + pos.currentValue, 0);
+    
+    res.json({
+      date: new Date().toISOString().split('T')[0],
+      cashPosition: cashPosition || { symbol: 'USDH', netPosition: 0, currentValue: 0 },
+      equityPositions,
+      totalPositions: equityPositions.length,
+      totalPortfolioValue: totalValue
+    });
+  } catch (err) {
+    console.error("GET /api/hold/status error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 2) Get hold strategy performance over time
+app.get("/api/hold/performance", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        hp.date,
+        hp.symbol,
+        hp.shares_bought,
+        hp.shares_sold,
+        COALESCE(hp.buy_price, 0) as buy_price,
+        COALESCE(hp.sell_price, 0) as sell_price,
+        hp.rebalance_reason,
+        COALESCE(pr_buy.price_open, hp.buy_price, 1.0) as price_open,
+        COALESCE(pr_sell.price_close, hp.sell_price, 1.0) as price_close
+      FROM hold_positions hp
+      LEFT JOIN daily_prices pr_buy ON hp.symbol = pr_buy.symbol AND hp.date = pr_buy.date
+      LEFT JOIN daily_prices pr_sell ON hp.symbol = pr_sell.symbol AND hp.date = pr_sell.date
+      WHERE hp.shares_bought > 0 OR hp.shares_sold > 0
+      ORDER BY hp.date ASC, hp.symbol ASC
+    `;
+    
+    const { rows } = await pool.query(q);
+    
+    const portfolioByDate = {};
+    const assetData = {};
+    const allSymbols = new Set();
+    const assetPnL = {}; // Track cumulative P&L per asset
+    const assetPositions = {}; // Track running position per asset
+    
+    rows.forEach(row => {
+      const dateStr = row.date.toISOString().split('T')[0];
+      const symbol = row.symbol;
+      
+      // Track all symbols that have ever been traded
+      if (symbol !== 'USDH') {
+        allSymbols.add(symbol);
+        
+        if (!assetPnL[symbol]) {
+          assetPnL[symbol] = 0;
+          assetPositions[symbol] = 0;
+        }
+        
+        // Update running position
+        const sharesBought = parseFloat(row.shares_bought) || 0;
+        const sharesSold = parseFloat(row.shares_sold) || 0;
+        assetPositions[symbol] += sharesBought - sharesSold;
+        
+        // Calculate P&L from this transaction
+        const buyValue = sharesBought * (parseFloat(row.buy_price) || 0);
+        const sellValue = sharesSold * (parseFloat(row.sell_price) || 0);
+        const transactionPnL = sellValue - buyValue;
+        
+        assetPnL[symbol] += transactionPnL;
+        
+        if (!assetData[symbol]) {
+          assetData[symbol] = [];
+        }
+        
+        assetData[symbol].push({
+          date: dateStr,
+          sharesBought: sharesBought,
+          sharesSold: sharesSold,
+          buyValue: buyValue,
+          sellValue: sellValue,
+          transactionPnL: transactionPnL,
+          cumulativePnL: assetPnL[symbol],
+          runningShares: assetPositions[symbol],
+          buyPrice: parseFloat(row.buy_price) || 0,
+          sellPrice: parseFloat(row.sell_price) || 0,
+          rebalanceReason: row.rebalance_reason
+        });
+      }
+    });
+    
+    // Calculate portfolio totals by date (actual portfolio value, not transaction P&L)
+    const allDates = new Set();
+    Object.keys(assetData).forEach(symbol => {
+      assetData[symbol].forEach(item => {
+        allDates.add(item.date);
+      });
+    });
+    
+    const sortedDates = Array.from(allDates).sort();
+    
+    for (const dateStr of sortedDates) {
+      let totalPortfolioValue = 0;
+      
+      // For each date, calculate the total portfolio value
+      // Get cash position on this date
+      const cashQuery = await pool.query(`
+        SELECT SUM(shares_bought) - SUM(shares_sold) as net_cash
+        FROM hold_positions 
+        WHERE symbol = 'USDH' AND date <= $1
+      `, [dateStr]);
+      
+      const cashPosition = parseFloat(cashQuery.rows[0]?.net_cash) || 0;
+      totalPortfolioValue += cashPosition;
+      
+      // Get equity positions with current market values
+      for (const symbol of Object.keys(assetData)) {
+        if (symbol === 'USDH') continue;
+        
+        const positionQuery = await pool.query(`
+          SELECT SUM(shares_bought) - SUM(shares_sold) as net_shares
+          FROM hold_positions 
+          WHERE symbol = $1 AND date <= $2
+        `, [symbol, dateStr]);
+        
+        const netShares = parseFloat(positionQuery.rows[0]?.net_shares) || 0;
+        
+        if (netShares > 0) {
+          // Get current price for this symbol on this date
+          const priceQuery = await pool.query(`
+            SELECT COALESCE(price_close, price_open) as price
+            FROM daily_prices 
+            WHERE symbol = $1 AND date = $2
+          `, [symbol, dateStr]);
+          
+          const currentPrice = parseFloat(priceQuery.rows[0]?.price) || 1.0;
+          totalPortfolioValue += (netShares * currentPrice);
+        }
+      }
+      
+      portfolioByDate[dateStr] = {
+        date: dateStr,
+        total: totalPortfolioValue
+      };
+    }
+    
+    res.json({
+      portfolioTotals: Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date)),
+      assetData,
+      symbols: Array.from(allSymbols).sort()
+    });
+  } catch (err) {
+    console.error("GET /api/hold/performance error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 3) Get hold strategy rebalancing history for a specific date
+app.get("/api/hold/execution/:date", async (req, res) => {
+  try {
+    const date = req.params.date;
+    
+    const q = `
+      SELECT 
+        hp.symbol,
+        hp.shares_bought,
+        hp.shares_sold,
+        hp.buy_price,
+        hp.sell_price,
+        hp.conviction_at_buy,
+        hp.conviction_at_sell,
+        hp.rebalance_reason,
+        hp.created_at,
+        hp.updated_at
+      FROM hold_positions hp
+      WHERE hp.date = $1
+      ORDER BY hp.created_at ASC, hp.symbol ASC
+    `;
+    
+    const { rows } = await pool.query(q, [date]);
+    
+    const executions = rows.map(row => ({
+      symbol: row.symbol,
+      sharesBought: parseFloat(row.shares_bought) || 0,
+      sharesSold: parseFloat(row.shares_sold) || 0,
+      buyPrice: parseFloat(row.buy_price) || 0,
+      sellPrice: parseFloat(row.sell_price) || 0,
+      convictionAtBuy: parseFloat(row.conviction_at_buy) || null,
+      convictionAtSell: parseFloat(row.conviction_at_sell) || null,
+      rebalanceReason: row.rebalance_reason,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      buyValue: (parseFloat(row.shares_bought) || 0) * (parseFloat(row.buy_price) || 0),
+      sellValue: (parseFloat(row.shares_sold) || 0) * (parseFloat(row.sell_price) || 0)
+    }));
+    
+    const totalBuyValue = executions.reduce((sum, ex) => sum + ex.buyValue, 0);
+    const totalSellValue = executions.reduce((sum, ex) => sum + ex.sellValue, 0);
+    
+    res.json({
+      date,
+      executions,
+      summary: {
+        totalBuyValue,
+        totalSellValue,
+        netPnL: totalSellValue - totalBuyValue,
+        rebalanceCount: executions.length
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/hold/execution/:date error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// 4) Get aggregate asset performance for all assets ever held in hold strategy
+app.get("/api/hold/assets", async (_req, res) => {
+  try {
+    const q = `
+      SELECT 
+        hp.symbol,
+        SUM(hp.shares_bought) as total_shares_bought,
+        SUM(hp.shares_sold) as total_shares_sold,
+        SUM(hp.shares_bought * COALESCE(hp.buy_price, 0)) as total_buy_value,
+        SUM(hp.shares_sold * COALESCE(hp.sell_price, 0)) as total_sell_value,
+        COUNT(DISTINCT hp.date) as rebalance_days,
+        MIN(hp.date) as first_trade_date,
+        MAX(hp.date) as last_trade_date,
+        (SUM(hp.shares_bought) - SUM(hp.shares_sold)) as current_position
+      FROM hold_positions hp
+      WHERE hp.symbol != 'USDH'
+      GROUP BY hp.symbol
+      ORDER BY hp.symbol
+    `;
+    
+    const { rows } = await pool.query(q);
+    
+    const assets = rows.map(row => ({
+      symbol: row.symbol,
+      totalSharesBought: parseFloat(row.total_shares_bought) || 0,
+      totalSharesSold: parseFloat(row.total_shares_sold) || 0,
+      totalBuyValue: parseFloat(row.total_buy_value) || 0,
+      totalSellValue: parseFloat(row.total_sell_value) || 0,
+      netPnL: (parseFloat(row.total_sell_value) || 0) - (parseFloat(row.total_buy_value) || 0),
+      rebalanceDays: parseInt(row.rebalance_days) || 0,
+      firstTradeDate: row.first_trade_date,
+      lastTradeDate: row.last_trade_date,
+      currentPosition: parseFloat(row.current_position) || 0,
+      isCurrentlyHeld: (parseFloat(row.current_position) || 0) > 0
+    }));
+    
+    // Calculate actual portfolio performance vs. initial investment
+    const totalBuyValue = assets.reduce((sum, a) => sum + a.totalBuyValue, 0);
+    const totalSellValue = assets.reduce((sum, a) => sum + a.totalSellValue, 0);
+    
+    // Get current total portfolio value (cash + current equity value)
+    const currentPortfolioQuery = await pool.query(`
+      SELECT 
+        SUM(CASE WHEN hp.symbol = 'USDH' THEN hp.shares_bought - hp.shares_sold ELSE 0 END) as cash_position,
+        SUM(CASE WHEN hp.symbol != 'USDH' THEN (hp.shares_bought - hp.shares_sold) * COALESCE(dp.price_close, dp.price_open, 1.0) ELSE 0 END) as equity_value
+      FROM hold_positions hp
+      LEFT JOIN daily_prices dp ON hp.symbol = dp.symbol AND dp.date = (NOW() AT TIME ZONE 'America/Chicago')::DATE
+    `);
+    
+    const cashPosition = parseFloat(currentPortfolioQuery.rows[0]?.cash_position) || 0;
+    const equityValue = parseFloat(currentPortfolioQuery.rows[0]?.equity_value) || 0;
+    const totalPortfolioValue = cashPosition + equityValue;
+    
+    // Total P&L = current portfolio value - initial investment (assuming started with $1000 USDH)
+    const initialInvestment = 1000; // This could be made dynamic later
+    const actualPnL = totalPortfolioValue - initialInvestment;
+    
+    const summary = {
+      totalAssets: assets.length,
+      currentlyHeld: assets.filter(a => a.isCurrentlyHeld).length,
+      totalBuyValue: totalBuyValue,
+      totalSellValue: totalSellValue,
+      totalNetPnL: actualPnL, // This is now the actual portfolio P&L vs. initial investment
+      currentPortfolioValue: totalPortfolioValue,
+      initialInvestment: initialInvestment
+    };
+    
+    res.json({
+      assets,
+      summary
+    });
+  } catch (err) {
+    console.error("GET /api/hold/assets error:", err);
+    res.status(500).json({ error: "query_failed", message: err.message });
   }
 });
 

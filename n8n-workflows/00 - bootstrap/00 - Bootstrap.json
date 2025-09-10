@@ -1,0 +1,260 @@
+{
+  "name": "00 - Bootstrap",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        -208
+      ],
+      "id": "7eeda6d0-3a9c-4774-a50c-560759f7294a",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS ticker_universe (\n  symbol TEXT PRIMARY KEY,\n  name TEXT,\n  exchange TEXT,\n  market_cap BIGINT,\n  volume BIGINT,\n  trailing_pe DOUBLE PRECISION,\n  fifty_two_week_high DOUBLE PRECISION,\n  fifty_two_week_low DOUBLE PRECISION,\n  dividend_yield DOUBLE PRECISION,\n  total_revenue BIGINT,\n  gross_margins DOUBLE PRECISION,\n  info_raw JSONB,\n  last_updated TIMESTAMP,\n  last_scanned TIMESTAMP\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -512,
+        -208
+      ],
+      "id": "1e3fefa3-e416-41de-b9aa-681e224e6605",
+      "name": "Create ticker_universe",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS ticker_scores (\nsymbol TEXT PRIMARY KEY,\nscore INTEGER,\nrecommendation TEXT,\nreason TEXT,\nlast_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -288,
+        -208
+      ],
+      "id": "9fb68510-e09b-4676-9e1b-906ac8f812b9",
+      "name": "Create ticker_scores",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS ticker_buys (\n  symbol TEXT PRIMARY KEY,\n  thesis TEXT,                  -- Original alpha thesis\n  original_conviction INTEGER, -- Initial conviction score (frozen)\n  last_conviction INTEGER,     -- Previous conviction score\n  conviction INTEGER,          -- Current conviction score\n  last_updated TIMESTAMP       -- Timestamp of last update\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -64,
+        -208
+      ],
+      "id": "6b1fc482-9156-40b6-9086-d1465bca607e",
+      "name": "Create ticker_buys",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS daily_prices (\n    id SERIAL PRIMARY KEY,\n    symbol TEXT NOT NULL,\n    date DATE NOT NULL,\n    price_open DECIMAL(10,2),\n    price_1hr_after_open DECIMAL(10,2),\n    price_close DECIMAL(10,2),\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    UNIQUE(symbol, date)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        160,
+        -208
+      ],
+      "id": "3f05e1ac-a9d5-4320-81bb-7a4204bd01fd",
+      "name": "Create daily_prices Table",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS portfolio_positions  (\n  id SERIAL PRIMARY KEY,\n  timestamp TIMESTAMP DEFAULT now(),\n  symbol TEXT NOT NULL,\n  allocation_usd NUMERIC(10,2),\n  conviction INTEGER,\n  total_portfolio_value NUMERIC(10,2),\n  notes TEXT\n);\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        384,
+        -208
+      ],
+      "id": "17384768-d9ca-4c3c-b05a-a85a32a61a62",
+      "name": "Create portfolio_positions Table if Missing",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS daily_valuation (\n    id SERIAL PRIMARY KEY,\n    date DATE NOT NULL,\n    symbol TEXT NOT NULL,\n    strategy VARCHAR(20) NOT NULL,      -- 'hold', 'daily', 'weekly'\n    trade_session_id VARCHAR(50),       -- For grouping multi-day positions\n    allocation_usd DECIMAL(15,2),       -- Original USD allocation\n    quantity_held DECIMAL(15,6),        -- Number of shares\n    entry_price DECIMAL(10,2),          -- Price at position entry\n    current_price DECIMAL(10,2),        -- Current price (varies by strategy)\n    value_close DECIMAL(15,2),          -- Current position value\n    profit_loss DECIMAL(15,2),          -- P&L vs original allocation\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    UNIQUE(date, symbol, strategy)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        832,
+        -208
+      ],
+      "id": "467b99c2-257d-4153-89a3-725041947752",
+      "name": "Create daily_valuation Table if Missing",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS price_snapshots (\n    id SERIAL PRIMARY KEY,\n    symbol TEXT NOT NULL,\n    date DATE NOT NULL,\n    price_open DECIMAL(10,2),           -- 9:30 AM Central\n    price_1hr_after_open DECIMAL(10,2), -- 10:30 AM Central  \n    price_close DECIMAL(10,2),          -- 4:00 PM Central\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    UNIQUE(symbol, date)\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        608,
+        -208
+      ],
+      "id": "abd1274e-ae2b-4586-af7c-3527d25abb09",
+      "name": "Create price_snapshots Table if Missing",
+      "credentials": {
+        "postgres": {
+          "id": "MI553DLfDKBYBMXy",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Create ticker_universe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create ticker_universe": {
+      "main": [
+        [
+          {
+            "node": "Create ticker_scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create ticker_scores": {
+      "main": [
+        [
+          {
+            "node": "Create ticker_buys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create ticker_buys": {
+      "main": [
+        [
+          {
+            "node": "Create daily_prices Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create portfolio_positions Table if Missing": {
+      "main": [
+        [
+          {
+            "node": "Create price_snapshots Table if Missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create price_snapshots Table if Missing": {
+      "main": [
+        [
+          {
+            "node": "Create daily_valuation Table if Missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create daily_prices Table": {
+      "main": [
+        [
+          {
+            "node": "Create portfolio_positions Table if Missing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e1c986f6-e44b-4d2b-9000-26e87865d78f",
+  "meta": {
+    "instanceId": "f789c2c474c97ef5e4de040eeaabbf0c6fb8405fe1c6683d5ae6768188a5df19"
+  },
+  "id": "LzB1EMVb6HSKPKh6",
+  "tags": [
+    {
+      "createdAt": "2025-09-04T15:23:38.975Z",
+      "updatedAt": "2025-09-04T15:23:38.975Z",
+      "id": "yQaAGmyd3yVCL790",
+      "name": "janus"
+    }
+  ]
+}

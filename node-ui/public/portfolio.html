@@ -33,8 +33,35 @@
     .loading { display: flex; justify-content: center; align-items: center; height: 200px; font-size: 18px; color: #666; }
     .error { color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 4px; margin: 15px 0; }
     .footer { text-align: center; color: #666; font-size: 14px; }
+    .strategy-btn { 
+      padding: 12px 24px; 
+      border: 2px solid #1976d2; 
+      background: white; 
+      color: #1976d2; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      font-size: 16px; 
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .strategy-btn:hover { 
+      background: #e3f2fd; 
+    }
+    .strategy-btn.active { 
+      background: #1976d2; 
+      color: white; 
+    }
+    .pnl-positive { 
+      color: #2e7d32; 
+      font-weight: 600; 
+    }
+    .pnl-negative { 
+      color: #d32f2f; 
+      font-weight: 600; 
+    }
     @media (max-width: 1024px) {
       .main { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+      .strategy-filters { flex-direction: column; align-items: center; }
     }
   </style>
 </head>
@@ -65,11 +92,20 @@
       </div>
     </div>
     
+    <div class="strategy-filters" style="display: flex; justify-content: center; gap: 15px; margin: 20px 0;">
+      <button id="holdBtn" class="strategy-btn" data-strategy="hold">Hold Strategy</button>
+      <button id="dailyBtn" class="strategy-btn active" data-strategy="daily">Daily Strategy</button>
+      <button id="weeklyBtn" class="strategy-btn" data-strategy="weekly">Weekly Strategy</button>
+    </div>
+    
     <div class="footer">
       Last updated: <span id="lastUpdated">-</span>
     </div>
   </div>
 
   <script src="/portfolio.js"></script>
+  <script src="/daily-strategy.js"></script>
+  <script src="/weekly-strategy.js"></script>
+  <script src="/hold-strategy.js"></script>
 </body>
 </html>
