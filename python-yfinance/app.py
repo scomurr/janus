@@ -179,5 +179,140 @@ def daily_prices():
     
     return jsonify(result)
 
+@app.route("/historical-prices")
+def historical_prices():
+    """Get historical prices for multiple tickers for a specific date"""
+    symbols = request.args.get("symbols")
+    target_date = request.args.get("date")
+    
+    if not symbols:
+        return jsonify({"error": "Missing symbols param"}), 400
+    if not target_date:
+        return jsonify({"error": "Missing date param (format: YYYY-MM-DD)"}), 400
+    
+    # Validate date format
+    try:
+        from datetime import datetime
+        datetime.strptime(target_date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+    
+    tickers = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    result = {}
+    
+    try:
+        for ticker in tickers:
+            stock = yf.Ticker(ticker)
+            
+            # Get historical data around the target date
+            # Use a range to ensure we get the target date even if it's a weekend/holiday
+            from datetime import datetime, timedelta
+            target = datetime.strptime(target_date, '%Y-%m-%d')
+            start_date = (target - timedelta(days=5)).strftime('%Y-%m-%d')
+            end_date = (target + timedelta(days=2)).strftime('%Y-%m-%d')
+            
+            hist = stock.history(start=start_date, end=end_date)
+            if hist.empty:
+                continue
+            
+            # Find the exact date or the closest trading day
+            hist_dates = hist.index.strftime('%Y-%m-%d').tolist()
+            
+            if target_date in hist_dates:
+                # Exact date found
+                target_data = hist[hist.index.strftime('%Y-%m-%d') == target_date].iloc[0]
+                actual_date = target_date
+            else:
+                # Find the closest trading day (preferring earlier dates)
+                available_dates = [d for d in hist_dates if d <= target_date]
+                if available_dates:
+                    actual_date = max(available_dates)
+                    target_data = hist[hist.index.strftime('%Y-%m-%d') == actual_date].iloc[0]
+                else:
+                    # If no earlier date, take the first available
+                    target_data = hist.iloc[0]
+                    actual_date = hist_dates[0]
+            
+            # Get 1hr after open price - try multiple approaches
+            one_hr_after_open = None
+            print(f"Processing ticker {ticker} for 1hr after open price...")
+            try:
+                import pandas as pd
+                
+                target_date_obj = datetime.strptime(actual_date, '%Y-%m-%d')
+                
+                # Method 1: Try yf.download with different intervals
+                for interval in ["5m", "15m", "30m", "1h"]:
+                    try:
+                        # Download for the specific day
+                        df = yf.download(ticker, start=actual_date, end=(target_date_obj + timedelta(days=1)).strftime('%Y-%m-%d'), interval=interval, progress=False)
+                        
+                        if not df.empty:
+                            # Convert to Eastern time if needed
+                            if hasattr(df.index, 'tz') and df.index.tz is not None:
+                                df.index = df.index.tz_convert("US/Eastern")
+                            
+                            # Filter for market hours (9:30 AM to 4 PM ET)
+                            market_hours = df.between_time('09:30', '16:00')
+                            
+                            if not market_hours.empty:
+                                if interval in ["5m", "15m"] and len(market_hours) > 12:
+                                    # For 5m: ~12 candles = 1hr, for 15m: ~4 candles = 1hr
+                                    target_idx = 12 if interval == "5m" else 4
+                                    one_hr_after_open = float(market_hours.iloc[min(target_idx, len(market_hours)-1)]["Close"])
+                                    print(f"Set 1hr price for {ticker} from {interval} interval: {one_hr_after_open}")
+                                    break
+                                elif interval == "30m" and len(market_hours) >= 2:
+                                    # Second 30m candle = ~1hr after open
+                                    one_hr_after_open = float(market_hours.iloc[1]["Close"])
+                                    print(f"Set 1hr price for {ticker} from {interval} interval: {one_hr_after_open}")
+                                    break
+                                elif interval == "1h" and len(market_hours) >= 1:
+                                    # First 1h candle = ~1hr after open
+                                    one_hr_after_open = float(market_hours.iloc[0]["Close"])
+                                    print(f"Set 1hr price for {ticker} from {interval} interval: {one_hr_after_open}")
+                                    break
+                    except Exception as e:
+                        print(f"Interval {interval} failed for {ticker}: {e}")
+                        continue
+                
+                # Method 2: If yf.download fails, try stock.history with period
+                if one_hr_after_open is None:
+                    try:
+                        # Get recent data and look for our date
+                        intraday = stock.history(period="5d", interval="1h")
+                        if not intraday.empty:
+                            # Filter for our target date
+                            date_mask = intraday.index.date == target_date_obj.date()
+                            day_data = intraday[date_mask]
+                            if not day_data.empty and len(day_data) >= 1:
+                                # Take first hour of trading
+                                one_hr_after_open = float(day_data.iloc[0]["Close"])
+                                print(f"Set 1hr price for {ticker} from Method 2: {one_hr_after_open}")
+                    except Exception as e:
+                        print(f"Method 2 failed for {ticker}: {e}")
+                        
+            except Exception as e:
+                print(f"1hr after open completely failed for {ticker}: {e}")
+                pass
+            
+            print(f"Final 1hr price for {ticker}: {one_hr_after_open}")
+            
+            result[ticker] = {
+                "date": target_date,
+                "actual_date": actual_date,
+                "open": float(target_data['Open']),
+                "close": float(target_data['Close']),
+                "high": float(target_data['High']),
+                "low": float(target_data['Low']),
+                "volume": int(target_data['Volume']) if target_data['Volume'] is not None else None,
+                "one_hr_after_open": one_hr_after_open
+            }
+            
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch historical data: {str(e)}"}), 500
+    
+    return jsonify(result)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

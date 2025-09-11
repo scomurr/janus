@@ -294,14 +294,81 @@ app.get("/api/daily/performance", async (_req, res) => {
       });
     });
     
+    // Add raw positions and prices data for correct P&L calculation
+    const rawPositions = rows.map(row => ({
+      symbol: row.symbol,
+      date: row.date.toISOString().split('T')[0],
+      shares_bought: parseFloat(row.shares_bought) || 0,
+      shares_sold: parseFloat(row.shares_sold) || 0,
+      price_open: parseFloat(row.price_open) || 0,
+      price_close: parseFloat(row.price_close) || 0
+    }));
+
     res.json({
       portfolioTotals: Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date)),
       assetData,
-      symbols: Array.from(allSymbols).sort()
+      symbols: Array.from(allSymbols).sort(),
+      rawPositions: rawPositions
     });
   } catch (err) {
     console.error("GET /api/daily/performance error:", err);
     res.status(500).json({ error: "query_failed", message: err.message });
+  }
+});
+
+// Generic chart data endpoint for all strategies
+app.get('/api/:strategy/chart-data', async (req, res) => {
+  try {
+    const strategy = req.params.strategy;
+    let query = '';
+    
+    // Each strategy defines its own chart query
+    switch(strategy) {
+      case 'daily':
+        query = `
+          SELECT 
+            to_char(dp.date, 'YYYY-MM-DD') AS date,
+            dp.shares_bought::float AS value
+          FROM daily_positions dp
+          LEFT JOIN daily_prices pr ON dp.symbol = pr.symbol AND dp.date = pr.date
+          WHERE dp.symbol = 'USDD' 
+            AND (pr.price_close IS NOT NULL OR dp.date < CURRENT_DATE)
+          ORDER BY dp.date ASC
+        `;
+        break;
+      case 'weekly':
+        query = `
+          SELECT 
+            to_char(wp.date, 'YYYY-MM-DD') AS date,
+            wp.shares_bought::float AS value
+          FROM weekly_positions wp
+          LEFT JOIN daily_prices pr ON wp.symbol = pr.symbol AND wp.date = pr.date
+          WHERE wp.symbol = 'USDW' 
+            AND (pr.price_close IS NOT NULL OR wp.date < CURRENT_DATE)
+          ORDER BY wp.date ASC
+        `;
+        break;
+      case 'hold':
+        query = `
+          SELECT 
+            to_char(hp.date, 'YYYY-MM-DD') AS date,
+            hp.shares_bought::float AS value
+          FROM hold_positions hp
+          LEFT JOIN daily_prices pr ON hp.symbol = pr.symbol AND hp.date = pr.date
+          WHERE hp.symbol = 'USDH' 
+            AND (pr.price_close IS NOT NULL OR hp.date < CURRENT_DATE)
+          ORDER BY hp.date ASC
+        `;
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid strategy' });
+    }
+    
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(`Error fetching ${req.params.strategy} chart data:`, error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -546,10 +613,21 @@ app.get("/api/weekly/performance", async (_req, res) => {
       item.total = cumulativeTotal;
     });
     
+    // Add raw positions and prices data for correct P&L calculation
+    const rawPositions = rows.map(row => ({
+      symbol: row.symbol,
+      date: row.date.toISOString().split('T')[0],
+      shares_bought: parseFloat(row.shares_bought) || 0,
+      shares_sold: parseFloat(row.shares_sold) || 0,
+      price_open: parseFloat(row.price_open) || 0,
+      price_close: parseFloat(row.price_close) || 0
+    }));
+
     res.json({
       portfolioTotals: sortedDates,
       assetData,
-      symbols: Array.from(allSymbols).sort()
+      symbols: Array.from(allSymbols).sort(),
+      rawPositions: rawPositions
     });
   } catch (err) {
     console.error("GET /api/weekly/performance error:", err);
@@ -859,10 +937,21 @@ app.get("/api/hold/performance", async (_req, res) => {
       };
     }
     
+    // Add raw positions and prices data for correct P&L calculation
+    const rawPositions = rows.map(row => ({
+      symbol: row.symbol,
+      date: row.date.toISOString().split('T')[0],
+      shares_bought: parseFloat(row.shares_bought) || 0,
+      shares_sold: parseFloat(row.shares_sold) || 0,
+      price_open: parseFloat(row.price_open) || 0,
+      price_close: parseFloat(row.price_close) || 0
+    }));
+
     res.json({
       portfolioTotals: Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date)),
       assetData,
-      symbols: Array.from(allSymbols).sort()
+      symbols: Array.from(allSymbols).sort(),
+      rawPositions: rawPositions
     });
   } catch (err) {
     console.error("GET /api/hold/performance error:", err);

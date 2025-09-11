@@ -39,7 +39,7 @@ class WeeklyStrategy {
         assets: assetsData
       };
       
-      this.render();
+      await this.render();
       
     } catch (error) {
       console.error('Error loading weekly strategy data:', error);
@@ -47,14 +47,32 @@ class WeeklyStrategy {
     }
   }
 
-  render() {
-    this.renderChart(this.allData.performance);
-    this.renderStatus(this.allData.status);
+  async render() {
+    await this.renderChart(this.allData.performance);
+    await this.renderStatus(this.allData.status);
     this.renderAssetDropdown(this.allData.assets);
     this.updateLastUpdated();
   }
 
-  renderChart(data) {
+  async getUSDWPositions() {
+    // Direct query: SELECT date, shares_bought FROM weekly_positions WHERE symbol = 'USDW' ORDER BY date ASC
+    try {
+      const response = await fetch('/api/weekly/chart-data');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data.map(item => ({
+        date: item.date,
+        total: item.value
+      }));
+    } catch (error) {
+      console.error('Error fetching USDW positions:', error);
+      return [];
+    }
+  }
+
+  async renderChart(data) {
     const canvas = document.getElementById('portfolioChart');
     if (!canvas) {
       console.error('Portfolio chart canvas not found');
@@ -64,11 +82,14 @@ class WeeklyStrategy {
     
     const datasets = [];
     
+    // Get USDW positions directly - simple query result
+    const cumulativePnLData = await this.getUSDWPositions();
+    
     // Add portfolio total dataset
-    if (data.portfolioTotals && data.portfolioTotals.length > 0) {
+    if (cumulativePnLData && cumulativePnLData.length > 0) {
       datasets.push({
         label: 'Weekly Strategy Total',
-        data: data.portfolioTotals.map(item => ({
+        data: cumulativePnLData.map(item => ({
           x: item.date,
           y: item.total
         })),
@@ -80,14 +101,16 @@ class WeeklyStrategy {
       });
     }
     
-    // Add individual asset datasets
-    if (data.symbols && data.symbols.length > 0) {
-      data.symbols.forEach((symbol, index) => {
+    // Add individual asset datasets with correct daily P&L
+    if (this.allData.performance && this.allData.performance.rawPositions) {
+      const assetDailyPnL = this.calculateAssetDailyPnL(this.allData.performance.rawPositions);
+      
+      Object.keys(assetDailyPnL).forEach((symbol, index) => {
         datasets.push({
-          label: `${symbol} P&L`,
-          data: data.assetData[symbol].map(item => ({
+          label: `${symbol} Daily P&L`,
+          data: assetDailyPnL[symbol].map(item => ({
             x: item.date,
-            y: item.cumulativePnL || 0
+            y: item.dailyPnL
           })),
           borderColor: this.colors[(index + 1) % this.colors.length],
           backgroundColor: this.colors[(index + 1) % this.colors.length] + '20',
@@ -219,7 +242,85 @@ class WeeklyStrategy {
     this.chart.update();
   }
 
-  renderStatus(data) {
+  getAssetPerformanceForTable(statusData) {
+    // Calculate correct P&L using raw positions data: shares_sold * (price_close - price_open)
+    if (!this.allData.performance || !this.allData.performance.rawPositions) {
+      return [];
+    }
+    
+    const rawPositions = this.allData.performance.rawPositions;
+    const assetPnL = {};
+    
+    rawPositions.forEach(position => {
+      const symbol = position.symbol;
+      
+      // Skip USDW cash account
+      if (symbol === 'USDW') return;
+      
+      // Skip if no shares sold (market hasn't closed) or no close price
+      if (position.shares_sold === 0 || position.price_close === 0) return;
+      
+      // Calculate daily P&L: shares_sold * (price_close - price_open)
+      const dailyPnL = position.shares_sold * (position.price_close - position.price_open);
+      
+      if (!assetPnL[symbol]) {
+        assetPnL[symbol] = {
+          symbol: symbol,
+          cumulativePnL: 0,
+          tradingDays: 0,
+          lastTradeDate: position.date
+        };
+      }
+      
+      assetPnL[symbol].cumulativePnL += dailyPnL;
+      assetPnL[symbol].tradingDays += 1;
+      assetPnL[symbol].lastTradeDate = position.date; // Will be overwritten with latest date
+    });
+    
+    // Convert to array and format dates
+    const results = Object.values(assetPnL).map(asset => ({
+      ...asset,
+      lastTradeDate: asset.lastTradeDate
+    }));
+    
+    return results.sort((a, b) => b.cumulativePnL - a.cumulativePnL); // Sort by P&L descending
+  }
+
+  calculateAssetDailyPnL(rawPositions) {
+    // Calculate daily P&L for each asset: shares_sold * (price_close - price_open)
+    const assetDailyPnL = {};
+    
+    rawPositions.forEach(position => {
+      const symbol = position.symbol;
+      
+      // Skip USDW cash account
+      if (symbol === 'USDW') return;
+      
+      // Skip if no shares sold (market hasn't closed) or no close price
+      if (position.shares_sold === 0 || position.price_close === 0) return;
+      
+      // Calculate daily P&L: shares_sold * (price_close - price_open)
+      const dailyPnL = position.shares_sold * (position.price_close - position.price_open);
+      
+      if (!assetDailyPnL[symbol]) {
+        assetDailyPnL[symbol] = [];
+      }
+      
+      assetDailyPnL[symbol].push({
+        date: position.date,
+        dailyPnL: dailyPnL
+      });
+    });
+    
+    // Sort each asset's data by date
+    Object.keys(assetDailyPnL).forEach(symbol => {
+      assetDailyPnL[symbol].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    
+    return assetDailyPnL;
+  }
+
+  async renderStatus(data) {
     const totalValueEl = document.getElementById('totalValue');
     const currentDataEl = document.getElementById('currentData');
     
@@ -234,15 +335,24 @@ class WeeklyStrategy {
       return;
     }
     
-    // Calculate total portfolio value (cash + equity positions)
-    const cashValue = data.cashPosition ? data.cashPosition.netPosition : 0;
-    // For weekly strategy, equity positions might be held, so we need current market values
-    const equityValue = data.equityPositions.reduce((sum, pos) => {
-      return sum + (pos.netPosition * this.getLatestPrice(pos.symbol));
-    }, 0);
-    const totalValue = cashValue + equityValue;
+    // Get current portfolio value from latest USDW position
+    const usdData = await this.getUSDWPositions();
+    let currentPortfolioValue = 0;
+    let totalCumulativePnL = 0;
     
-    totalValueEl.textContent = '$' + totalValue.toLocaleString('en-US', {
+    if (usdData && usdData.length > 0) {
+      // Use latest USDW position as current portfolio value
+      currentPortfolioValue = usdData[usdData.length - 1].total;
+    }
+    
+    // Get cumulative P&L for status display
+    if (this.allData && this.allData.performance && this.allData.performance.portfolioTotals) {
+      const latestTotal = this.allData.performance.portfolioTotals[this.allData.performance.portfolioTotals.length - 1];
+      totalCumulativePnL = latestTotal ? latestTotal.total : 0;
+    }
+    
+    // Show current portfolio value (USDW position) in main display
+    totalValueEl.textContent = '$' + currentPortfolioValue.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
@@ -253,12 +363,11 @@ class WeeklyStrategy {
         <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #333;">Weekly Strategy Status</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
           <div>
-            <strong>Current Week:</strong> ${data.weekStart}<br>
-            <strong>Holdings:</strong> ${data.totalPositions} positions
+            <strong>Last Trade Date:</strong> ${data.date}<br>
+            <strong>Trading Days:</strong> ${this.allData.performance ? this.allData.performance.portfolioTotals.length : 0}
           </div>
           <div>
-            <strong>Cash (USDW):</strong> $${cashValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}<br>
-            <strong>Equity Value:</strong> $${equityValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            <strong>Strategy:</strong> Weekly position management
           </div>
         </div>
       </div>
@@ -317,7 +426,9 @@ class WeeklyStrategy {
   }
 
   renderAssetDropdown(data) {
-    if (!data || !data.assets) return;
+    // Use corrected asset performance data instead of assets endpoint data
+    const assetPerfData = this.getAssetPerformanceForTable();
+    if (!assetPerfData || assetPerfData.length === 0) return;
     
     // Find a place to put the asset dropdown - add it to the summary panel
     const summaryPanel = document.querySelector('.summary-panel');
@@ -339,24 +450,29 @@ class WeeklyStrategy {
       }
     }
     
-    // Create dropdown HTML
-    const sortedAssets = [...data.assets].sort((a, b) => b.netPnL - a.netPnL);
+    // Calculate total P&L and trading period from corrected data
+    const totalPnL = assetPerfData.reduce((sum, asset) => sum + asset.cumulativePnL, 0);
+    const allDates = this.allData.performance.rawPositions
+      .filter(p => p.shares_sold > 0)
+      .map(p => p.date)
+      .sort();
+    const firstTradeDate = allDates.length > 0 ? allDates[0] : '';
+    const lastTradeDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
     
     assetDropdownContainer.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h4 style="margin: 0; font-size: 14px; color: #555;">Weekly Asset Performance</h4>
         <div style="font-size: 12px; color: #666;">
-          Total P&L: <span style="color: ${data.summary.totalNetPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
-            $${data.summary.totalNetPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          Total P&L: <span style="color: ${totalPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
+            ${totalPnL >= 0 ? '+' : ''}$${totalPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
         </div>
       </div>
       <select id="assetSelector" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
         <option value="">Select an asset to view details...</option>
-        ${sortedAssets.map(asset => `
+        ${assetPerfData.map(asset => `
           <option value="${asset.symbol}">
-            ${asset.symbol} - ${asset.netPnL >= 0 ? '+' : ''}$${asset.netPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            ${asset.isCurrentlyHeld ? ' (Held)' : ' (Closed)'}
+            ${asset.symbol} - ${asset.cumulativePnL >= 0 ? '+' : ''}$${asset.cumulativePnL.toLocaleString('en-US', { minimumFractionDigits: 3 })} (Closed)
           </option>
         `).join('')}
       </select>
@@ -367,12 +483,12 @@ class WeeklyStrategy {
     const assetSelector = document.getElementById('assetSelector');
     if (assetSelector) {
       assetSelector.addEventListener('change', (e) => {
-        this.showAssetDetails(e.target.value, data.assets);
+        this.showAssetDetails(e.target.value, assetPerfData);
       });
     }
   }
 
-  showAssetDetails(symbol, assets) {
+  showAssetDetails(symbol, assetPerfData) {
     const assetDetailsEl = document.getElementById('assetDetails');
     if (!assetDetailsEl) return;
     
@@ -381,21 +497,34 @@ class WeeklyStrategy {
       return;
     }
     
-    const asset = assets.find(a => a.symbol === symbol);
+    const asset = assetPerfData.find(a => a.symbol === symbol);
     if (!asset) return;
     
-    const pnlClass = asset.netPnL >= 0 ? 'pnl-positive' : 'pnl-negative';
+    // Get all positions for this symbol (both closed and current)
+    const allPositions = this.allData.performance.rawPositions.filter(p => p.symbol === symbol && (p.shares_bought > 0 || p.shares_sold > 0));
+    const closedPositions = allPositions.filter(p => p.shares_sold > 0);
+    const currentPosition = allPositions.find(p => p.shares_bought > 0 && p.shares_sold === 0);
+    
+    const totalSharesSold = closedPositions.reduce((sum, p) => sum + p.shares_sold, 0);
+    const totalTradingDays = allPositions.length; // Count all days we had positions
+    
+    // Get first and last trading dates
+    const allDates = allPositions.map(p => p.date).sort();
+    const firstTradeDate = allDates.length > 0 ? allDates[0] : '';
+    const lastTradeDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
+    
+    const pnlClass = asset.cumulativePnL >= 0 ? 'pnl-positive' : 'pnl-negative';
     
     assetDetailsEl.innerHTML = `
       <div style="background: white; padding: 15px; border-radius: 4px; border: 1px solid #ddd;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
           <div>
             <strong>${symbol}</strong><br>
-            <span style="color: #666;">Status: ${asset.isCurrentlyHeld ? 'Currently Held' : 'Position Closed'}</span>
+            <span style="color: #666;">Status: ${currentPosition ? 'Currently Held' : 'Position Closed'}</span>
           </div>
           <div style="text-align: right;">
             <div class="${pnlClass}" style="font-size: 16px; font-weight: 600;">
-              ${asset.netPnL >= 0 ? '+' : ''}$${asset.netPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${asset.cumulativePnL >= 0 ? '+' : ''}$${asset.cumulativePnL.toLocaleString('en-US', { minimumFractionDigits: 3 })}
             </div>
           </div>
         </div>
@@ -403,21 +532,16 @@ class WeeklyStrategy {
         <div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px;">
           <div>
             <strong>Trading Activity:</strong><br>
-            Shares Bought: ${asset.totalSharesBought.toLocaleString()}<br>
-            Shares Sold: ${asset.totalSharesSold.toLocaleString()}<br>
-            Current Position: ${asset.currentPosition.toLocaleString()}
+            Total Shares Traded: ${totalSharesSold.toLocaleString()}<br>
+            Trading Days: ${totalTradingDays}<br>
+            Strategy: Weekly position management
           </div>
           <div>
-            <strong>Value Activity:</strong><br>
-            Total Bought: $${asset.totalBuyValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}<br>
-            Total Sold: $${asset.totalSellValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}<br>
-            Trading Days: ${asset.tradingDays}
+            <strong>Trading Period:</strong><br>
+            First Trade: ${firstTradeDate}<br>
+            Last Trade: ${lastTradeDate}<br>
+            Current Position: ${currentPosition ? currentPosition.shares_bought.toLocaleString() : '0'}
           </div>
-        </div>
-        
-        <div style="margin-top: 15px; font-size: 13px; color: #666;">
-          <strong>Trading Period:</strong> 
-          ${new Date(asset.firstTradeDate).toLocaleDateString()} - ${new Date(asset.lastTradeDate).toLocaleDateString()}
         </div>
       </div>
     `;
