@@ -1,92 +1,129 @@
-# 03 - Scoring Workflows
+# Scoring Workflows
 
-## Overview
-The scoring phase consists of multiple workflows that generate and manage investment recommendations:
-- **03a - Scoring**: AI-powered analysis and scoring of filtered tickers
-- **03b - Update Conviction Scores (manual)**: Manual entry of conviction scores (current)
-- **03b - Update Conviction Scores (AI)**: AI-powered conviction scoring (in development)
+This directory contains n8n workflows for the scoring category of the Janus trading system.
 
-## 03a - Scoring
-**Purpose**: Analyzes filtered ticker data using multiple AI models to generate investment scores and recommendations
+## Workflow Overview
 
-**Trigger**: Sunday at 8:00 AM Central
+### 03a - AI Scoring
+- **File**: `03a_-_AI_Scoring.json`
+- **Status**: Active (active: true)
+- **Schedule**: Weekly - Sundays at 8:00 AM
+- **Purpose**: Multi-model AI analysis and scoring of micro-cap stocks
+- **Use Case**: 
+  - Filters ticker universe for viable micro-cap investments (market cap < $300M)
+  - Applies strict financial health criteria for quality screening
+  - Analyzes filtered stocks using three AI models in parallel:
+    - OpenAI GPT-4o-latest for primary analysis
+    - Google Gemini 2.5 Flash for validation
+    - Ollama Llama3 (local) for additional perspective
+  - Generates investment scores (1-10) and recommendations (Buy/Hold/Sell)
+  - Stores comprehensive analysis results in `ticker_scores` database table
+  - Includes Discord notifications for workflow monitoring
 
-**Filtering Criteria (Trading Terms)**:
-- Small-cap stocks only: Market cap under $300 million
-- Profitable companies: Must have positive revenue and gross margins
-- Liquid stocks: Daily volume above 10,000 shares
-- Reasonable valuation: P/E ratio between 1-100 (excludes loss-making and extremely overvalued stocks)
-- Dividend sanity check: Dividend yield under 50% (excludes dividend traps)
-- Price stability: 52-week high/low ratio under 100x (excludes extreme penny stocks)
-- Revenue efficiency: Revenue must be at least 1% of market cap (excludes shell companies)
-- Trading liquidity: Daily volume must exceed market cap ÷ 1000 (ensures adequate liquidity)
+### 03b - Update Conviction Scores (AI)
+- **File**: `03b_-_Update_Conviction_Scores__AI_.json`
+- **Status**: Inactive (active: false)
+- **Schedule**: Manual trigger only
+- **Purpose**: AI-powered conviction scoring (development/testing)
+- **Use Case**: 
+  - Retrieves active daily strategy tickers from portfolio
+  - Uses AI agent with Redis memory for conviction analysis
+  - Integrates with Kali tools for additional research capabilities
+  - Generates hardcoded conviction scores for testing
+  - Updates `ticker_buys` table with conviction ratings (1-5 scale)
 
-**Multi-Model AI Analysis**:
-- **OpenAI GPT-4o-latest**: Primary analysis model
-- **Google Gemini 2.5 Flash**: Parallel validation analysis
-- **Ollama (Local)**: Local model for additional perspective
+### 03b - Update Conviction Scores (manual)
+- **File**: `03b_-_Update_Conviction_Scores__manual_.json`
+- **Status**: Inactive (active: false)
+- **Schedule**: Manual trigger only
+- **Purpose**: Manual conviction score entry and thesis management
+- **Use Case**: 
+  - Manual entry of conviction scores with detailed analyst notes
+  - Combines multiple analyst notes into comprehensive thesis statements
+  - Stores conviction ratings with trade dates for historical tracking
+  - Updates `ticker_buys` table with manual conviction assessments
+  - Used for human oversight and validation of AI recommendations
 
-## 03b - Update Conviction Scores (manual)
-**Purpose**: Manually set conviction scores for portfolio allocation
+### 03d - Get Prices Info per Time
+- **File**: `03d_-_Get_Prices_Info_per_Time.json`
+- **Status**: Active (active: true)
+- **Schedule**: Multiple daily schedules:
+  - 9:30 AM Central (Market Open) - Opening prices
+  - 3:55 PM Central (Market Close) - Closing prices
+- **Purpose**: Automated price data collection throughout trading day
+- **Use Case**: 
+  - Fetches opening prices from Python API at market open
+  - Collects closing prices before market close
+  - Stores daily price data in `daily_prices` table
+  - Supports historical price analysis and performance tracking
+  - Includes comprehensive error handling and Discord notifications
 
-**Trigger**: Manual execution as needed
+## Workflow Features
 
-**Process**:
-- Creates/updates ticker_buys table with enhanced schema
-- Preserves historical conviction data (original_conviction, last_conviction)
-- Fills thesis from ticker_scores where missing
-- Updates conviction scores via manual code block entry
+### Multi-Model AI Analysis (03a)
+- **Financial Screening**: Rigorous filtering criteria for micro-cap quality assessment
+- **Parallel Processing**: Three AI models analyze each stock simultaneously
+- **Comprehensive Scoring**: 1-10 investment scores with detailed reasoning
+- **Risk Assessment**: Buy/Hold/Sell recommendations based on fundamental analysis
 
-## 03b - Update Conviction Scores (AI) 
-**Purpose**: AI-powered conviction scoring (in development - will replace manual process)
+### Conviction Management (03b variants)
+- **Human-AI Hybrid**: Combines AI analysis with human judgment
+- **Historical Tracking**: Maintains conviction score history with timestamps
+- **Thesis Management**: Stores detailed investment thesis for each position
+- **Flexible Scoring**: 1-5 conviction scale for portfolio allocation
 
-**Status**: Under development - intended to automate the conviction scoring process
+### Price Data Collection (03d)
+- **Real-time Capture**: Opening and closing price collection
+- **API Integration**: Python microservice for reliable price data
+- **Data Persistence**: Historical price tracking in PostgreSQL
+- **Schedule Flexibility**: Multiple daily collection points
 
-## Workflow Components
+### Automation Features
+- **Scheduled Execution**: Automated runs at optimal market times
+- **Error Handling**: Comprehensive error catching with Discord notifications
+- **Data Validation**: SQL injection protection and data sanitization
+- **Monitoring**: Real-time workflow status notifications
 
-### 03a - Scoring Workflow
-**Create Table if Missing**
-- Creates ticker_scores table if it doesn't exist
-- Schema includes symbol, score, recommendation, reason, model_source
+## Dependencies
 
-**Execute a SQL query**
-- Filters ticker_universe with investment criteria and orders by market cap ascending
-- Applies all filtering criteria to identify viable small-cap candidates
+- **External APIs**: 
+  - OpenAI API for GPT-4o-latest analysis
+  - Google Gemini API for validation analysis
+  - Python microservice for price data (marketcap-api:5000)
+  - Discord webhook for notifications
+- **Local Services**:
+  - Ollama for local AI model inference
+  - Redis for AI agent memory management
+  - PostgreSQL with scoring and pricing tables
+- **Database Tables**:
+  - `ticker_universe` - Filtered stock universe
+  - `ticker_scores` - AI analysis results
+  - `ticker_buys` - Conviction scores and thesis
+  - `daily_prices` - Historical price data
+  - `portfolio_positions` - Active trading positions
 
-**AI Model Configuration**:
-- **OpenAI Chat Model**: Configures OpenAI GPT-4o-latest connection
-- **Google Gemini Chat Model**: Configures Google Gemini API connection  
-- **Ollama Chat Model**: Configures local Ollama model connection
+## Data Output
 
-**AI Analysis Execution**:
-- **OpenAI**: Sends filtered ticker data to OpenAI for analysis using GPT-4o-latest model
-- **Gemini**: Sends same ticker data to Google Gemini 2.5 Flash for parallel analysis
-- **Basic LLM Chain**: Processes ticker data through Ollama local model
+### Scoring Data (`ticker_scores`)
+- `symbol` - Stock ticker symbol
+- `model` - AI model used (openai/gemini/llama3)
+- `score` - Investment score (1-10)
+- `recommendation` - Buy/Hold/Sell recommendation
+- `reason` - Detailed analysis reasoning
+- `last_updated` - Timestamp of analysis
 
-**Response Processing**:
-- **Parse OpenAI Response**: Extracts JSON response from OpenAI containing score, recommendation, and reason
-- **Parse Gemini Response**: Extracts JSON response from Google Gemini
-- **Parse Llama3 Response**: Extracts JSON response from local Ollama model
+### Conviction Data (`ticker_buys`)
+- `symbol` - Stock ticker symbol
+- `conviction` - Conviction rating (1-5)
+- `thesis` - Investment thesis statement
+- `trade_date` - Date of conviction assessment
+- `last_updated` - Timestamp of update
 
-**Data Storage**:
-- **Insert into Ticker Scores**: Saves the AI-generated scores and recommendations to ticker_scores table
+### Price Data (`daily_prices`)
+- `symbol` - Stock ticker symbol
+- `date` - Trading date
+- `price_open` - Opening price
+- `price_close` - Closing price
+- `created_at` - Data collection timestamp
 
-**Error Handling**:
-- **Error Trigger**: Catches any workflow errors
-- **Discord**: Sends error notifications to Discord if workflow fails
-
-### 03b - Update Conviction Scores (manual) Workflow
-**Create Enhanced Table**
-- Creates/updates ticker_buys table with enhanced schema
-- Includes: symbol, conviction, thesis, original_conviction, last_conviction
-
-**Preserve Historical Data**:
-- **Fill Thesis from Ticker Scores**: Copies reason from ticker_scores into empty thesis fields
-- **Preserve Conviction History**: Moves current conviction to last_conviction, sets original_conviction
-
-**Manual Score Entry**:
-- **Conviction Scores**: JavaScript code block for manual entry of conviction scores
-- **Update Conviction Scores**: Updates ticker_buys table with new conviction values
-
-### 03b - Update Conviction Scores (AI) Workflow
-**Status**: In development - intended to replace manual conviction scoring process with AI-driven analysis
+This scoring system provides the analytical foundation for the Janus trading system, combining AI-powered fundamental analysis with human oversight and real-time price tracking for informed investment decisions.

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/projects/janus/n8n-workflows/01 - discovery/**)",
+      "Read(//d/projects/janus/n8n-workflows/05 - execution/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
