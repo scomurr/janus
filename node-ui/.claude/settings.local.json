@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Read(//d/projects/janus/python-yfinance/**)"
+      "Read(//d/projects/janus/**)"
     ],
     "deny": [],
     "ask": []

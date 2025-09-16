@@ -1,30 +1,145 @@
-select * from daily_positions where date ='2025-09-10'
-id	symbol	date	shares_bought	shares_sold	created_at	updated_at
-167	CHRS	2025-09-10	0.000000	104.377700	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-168	CRNT	2025-09-10	0.000000	42.064600	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-169	GAMB	2025-09-10	0.000000	10.399700	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-170	IMMR	2025-09-10	0.000000	12.182900	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-171	IMPP	2025-09-10	0.000000	36.791100	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-172	LGPS	2025-09-10	0.000000	53.169800	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-173	MAPS	2025-09-10	0.000000	68.185400	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-174	MATH	2025-09-10	0.000000	16.823800	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-175	MIND	2025-09-10	0.000000	9.042700	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-176	PBYI	2025-09-10	0.000000	24.243000	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-177	PSHG	2025-09-10	0.000000	44.267000	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-178	USDD	2025-09-10	0.000000	0.000000	2025-09-10 16:20:11.019415	2025-09-10 21:05:00.115257
-12 rows (0.001 s) Edit, Explain, Export
-
-select * from daily_prices where date ='2025-09-10'
-id	symbol	date	price_open	price_1hr_after_open	price_close	created_at
-276	CHRS	2025-09-10	1.35	NULL	1.31	2025-09-10 14:42:04.005232
-277	CRNT	2025-09-10	2.01	NULL	2.00	2025-09-10 14:42:04.005232
-278	GAMB	2025-09-10	8.13	NULL	7.95	2025-09-10 14:42:04.005232
-279	IMMR	2025-09-10	6.94	NULL	6.84	2025-09-10 14:42:04.005232
-280	IMPP	2025-09-10	3.83	NULL	4.00	2025-09-10 14:42:04.005232
-281	LGPS	2025-09-10	1.06	NULL	1.10	2025-09-10 14:42:04.005232
-282	MAPS	2025-09-10	1.24	NULL	1.21	2025-09-10 14:42:04.005232
-283	MATH	2025-09-10	3.35	NULL	3.23	2025-09-10 14:42:04.005232
-284	MIND	2025-09-10	9.35	NULL	8.17	2025-09-10 14:42:04.005232
-285	PBYI	2025-09-10	4.65	NULL	4.54	2025-09-10 14:42:04.005232
-286	PSHG	2025-09-10	1.91	NULL	1.92	2025-09-10 14:42:04.005232
-11 rows (0.001 s) Edit, Explain, Export
+Found MjjYud divs: 1
+VM1011:8 
+=== Article 0 ===
+VM1011:15 Link element: <a jsname=​"UWckNb" class=​"zReHs" href=​"https:​/​/​finance.yahoo.com/​quote/​AAPL/​" data-ved=​"2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQFnoECDAQAQ" ping=​"/​url?sa=t&source=web&rct=j&opi=89978449&url=https:​/​/​finance.yahoo.com/​quote/​AAPL/​&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQFnoECDAQAQ">​…​</a>​
+VM1011:16 Link href: https://finance.yahoo.com/quote/AAPL/
+VM1011:17 Link classes: zReHs
+VM1011:19 Title element: <h3 class=​"LC20lb MBeuO DKV0Md">​Apple Inc. (AAPL) Stock Price, News, Quote & History​</h3>​
+VM1011:20 Title text: Apple Inc. (AAPL) Stock Price, News, Quote & History
+VM1011:21 Title classes: LC20lb MBeuO DKV0Md
+VM1011:23 Description element: <span>​…​</span>​
+VM1011:24 Description text: Find the latest Apple Inc. (AAPL) stock quote, history, news and other vital information to help you with your stock trading and investing.
+VM1011:30 All links in this article:
+VM1011:32   Link 0: nRE6Fe -> https://www.google.com/search?q=aapl&sca_esv=cdd4458fa27f824d&tbm=nws&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&story=GhMSEUFwcGxlJ3MgaVBob25lIDE3Mi8KJeLtoZvvkICpFZmhhrOa8eDC7AGp9aHVlazzgHe3lKGntLT5oWIQ4qGStw8YBXICEAE&fcs=ADCZBRTBGbajSHZuKnL6wxh2jC2mNAy5Xg&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQjcEJegQIPRAD
+VM1011:32   Link 1: WlydOe -> https://www.tipranks.com/news/apples-aapl-record-breaking-iphone-17-pre-orders-signal-strong-demand
+VM1011:32   Link 2: WlydOe -> https://seekingalpha.com/article/4822827-apple-another-air-ball
+VM1011:32   Link 3: WlydOe -> https://www.investors.com/news/technology/apple-stock-aapl-iphone-17-preorders/
+VM1011:32   Link 4: WlydOe -> https://www.barrons.com/articles/apple-stock-price-iphone-17-preorder-0a6ee75a
+VM1011:32   Link 5: WlydOe -> https://uk.finance.yahoo.com/news/jim-cramer-says-already-ordered-213820457.html
+VM1011:32   Link 6: WlydOe -> https://finance.yahoo.com/news/apple-aapl-valuation-examining-numbers-105537114.html
+VM1011:32   Link 7: WlydOe -> https://www.marketbeat.com/instant-alerts/filing-anderson-financial-strategies-llc-buys-2857-shares-of-apple-inc-aapl-2025-09-15/
+VM1011:32   Link 8: jRKCUd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=aapl&tbm=nws&source=univ&tbo=u&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQt8YBKAV6BAg7EAo
+VM1011:32   Link 9: zReHs -> https://finance.yahoo.com/quote/AAPL/
+VM1011:32   Link 10: dM1Yyd -> https://finance.yahoo.com/chart/AAPL
+VM1011:32   Link 11: dM1Yyd -> https://es.finance.yahoo.com/quote/AAPL/
+VM1011:32   Link 12: dM1Yyd -> https://finance.yahoo.com/quote/AAPL/news/
+VM1011:32   Link 13: dM1Yyd -> https://finance.yahoo.com/quote/AAPL/key-statistics/
+VM1011:32   Link 14: zReHs -> https://www.nasdaq.com/market-activity/stocks/aapl
+VM1011:32   Link 15: dM1Yyd -> https://www.nasdaq.com/market-activity/stocks/aapl/advanced-charting
+VM1011:32   Link 16: dM1Yyd -> https://www.nasdaq.com/market-activity/stocks/aapl/historical
+VM1011:32   Link 17: dM1Yyd -> https://www.nasdaq.com/de/market-activity/stocks/aapl
+VM1011:32   Link 18: dM1Yyd -> https://www.nasdaq.com/market-activity/stocks/aapl/analyst-research
+VM1011:32   Link 19: zReHs -> https://finviz.com/quote.ashx?t=AAPL
+VM1011:32   Link 20: dM1Yyd -> https://finviz.com/quote.ashx?t=AAPL&ty=ea
+VM1011:32   Link 21: dM1Yyd -> https://finviz.com/quote.ashx?t=AAPL&ty=oc
+VM1011:32   Link 22: dM1Yyd -> https://finviz.com/quote.ashx?t=AAPL&ty=si
+VM1011:32   Link 23: H62xKc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Stock+Split&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQxccNegUI0QEQAw
+VM1011:32   Link 24: H62xKc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Market+Dynamics&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQxccNegUI_AEQAw
+VM1011:32   Link 25: DTlJ6d -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Market+Cap+Growth&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQxccNegUIyAEQAQ
+VM1011:32   Link 26: KEVENd -> https://theweek.com/articles/468364/apple-stock-ever-reach-700-again
+VM1011:32   Link 27: KEVENd -> https://capital.com/en-int/analysis/apple-stock-price-in-10-years#:~:text=Algorithmic%20Apple%20stock%20predictions,carry%20high%20levels%20of%20uncertainty.
+VM1011:32   Link 28: KEVENd -> https://www.moneyshow.com/articles/no-nonsense-30470/
+VM1011:32   Link 29: KEVENd -> https://www.aol.com/finance/apple-stock-rout-shaves-nearly-170617285.html#:~:text=Artificial%20intelligence%20(AI)%20has%20positively,2022.
+VM1011:32   Link 30: KEVENd -> https://www.accio.com/plp/iphone-stock
+VM1011:32   Link 31: KEVENd -> https://www.ig.com/en/trading-strategies/apple-stock-split-2020--what-you-need-to-know-230803#:~:text=Will%20Apple%20stock%20split%20again,best%20interests%20of%20the%20company.&text=If%20Apple's%20shares%20once%20again,split%20in%20the%20coming%20months.
+VM1011:32   Link 32: KEVENd -> https://stockinvest.us/stock/AAPL#:~:text=The%20Apple%20stock%20holds%20a,will%20send%20a%20sell%20signal.
+VM1011:32   Link 33: KEVENd -> https://www.investors.com/news/technology/apple-stock-creeps-higher-before-iphone-17-reveal/#:~:text=Apple%20Stock%20Concerns,a%20rumored%20smart%20home%20hub.
+VM1011:32   Link 34: KEVENd -> https://www.aol.com/where-apple-stock-3-years-121200060.html#:~:text=CFO%20Kevan%20Parekh%20is%20expecting,gains%20for%20its%20stock%20price.
+VM1011:32   Link 35:  -> https://support.google.com/websearch?p=ai_overviews&hl=en
+VM1011:32   Link 36: ddkIM rz5jw c30Ztd -> https://theweek.com/articles/468364/apple-stock-ever-reach-700-again
+VM1011:32   Link 37: ddkIM rz5jw c30Ztd -> https://capital.com/en-int/analysis/apple-stock-price-in-10-years#:~:text=Algorithmic%20Apple%20stock%20predictions,carry%20high%20levels%20of%20uncertainty.
+VM1011:32   Link 38: ddkIM rz5jw c30Ztd -> https://www.moneyshow.com/articles/no-nonsense-30470/
+VM1011:32   Link 39: ddkIM rz5jw c30Ztd -> https://www.aol.com/finance/apple-stock-rout-shaves-nearly-170617285.html#:~:text=Artificial%20intelligence%20(AI)%20has%20positively,2022.
+VM1011:32   Link 40: ddkIM rz5jw c30Ztd -> https://www.accio.com/plp/iphone-stock
+VM1011:32   Link 41: ddkIM rz5jw c30Ztd -> https://www.ig.com/en/trading-strategies/apple-stock-split-2020--what-you-need-to-know-230803#:~:text=Will%20Apple%20stock%20split%20again,best%20interests%20of%20the%20company.&text=If%20Apple's%20shares%20once%20again,split%20in%20the%20coming%20months.
+VM1011:32   Link 42: ddkIM rz5jw c30Ztd -> https://stockinvest.us/stock/AAPL#:~:text=The%20Apple%20stock%20holds%20a,will%20send%20a%20sell%20signal.
+VM1011:32   Link 43: ddkIM rz5jw c30Ztd -> https://www.investors.com/news/technology/apple-stock-creeps-higher-before-iphone-17-reveal/#:~:text=Apple%20Stock%20Concerns,a%20rumored%20smart%20home%20hub.
+VM1011:32   Link 44: ddkIM rz5jw c30Ztd -> https://www.aol.com/where-apple-stock-3-years-121200060.html#:~:text=CFO%20Kevan%20Parekh%20is%20expecting,gains%20for%20its%20stock%20price.
+VM1011:32   Link 45: KEVENd -> https://finance.yahoo.com/news/6-investing-experts-predict-high-210021290.html#:~:text=Experts%20Are%20Curious%20About%20the,any%20dips%20in%20hardware%20sales.%E2%80%9D
+VM1011:32   Link 46: KEVENd -> https://www.marketbeat.com/stocks/NASDAQ/AAPL/forecast/#:~:text=and%20Consensus%20Rating-,Consensus%20Rating,Based%20on%2032%20Analyst%20Ratings
+VM1011:32   Link 47: KEVENd -> https://www.tipranks.com/stocks/aapl/forecast#:~:text=High%20$290.00,Lowest$180.00
+VM1011:32   Link 48: KEVENd -> https://247wallst.com/forecasts/2025/09/08/apple-inc-aapl-price-prediction-and-forecast-2025-2030/#:~:text=The%20consensus%20recommendation%20of%2045,into%20the%202025%20Christmas%20season.
+VM1011:32   Link 49: KEVENd -> https://www.forbes.com/sites/investor-hub/article/apple-aapl-stock-2025-price-prediction/#:~:text=Growth%20Of%20Apple's%20Service%20Segments,are%20now%20so%20widely%20owned.
+VM1011:32   Link 50: KEVENd -> https://247wallst.com/forecasts/2025/07/04/apple-inc-aapl-price-prediction-and-forecast-2025-2030/#:~:text=Key%20Drivers%20for%20the%20Stock&text=Free%20software%20update%20Apple%20Intelligence,iCloud%20storage%20for%20AI%20projects.
+VM1011:32   Link 51: KEVENd -> https://capital.com/en-int/analysis/apple-stock-price-in-10-years#:~:text=Ongoing%20efforts%20to%20diversify%20production,dampen%20AAPL%20stock%20price%20prospects.
+VM1011:32   Link 52: KEVENd -> https://finance.yahoo.com/news/prediction-apple-soar-over-next-144237732.html#:~:text=Then%20again%2C%20perhaps%20the%20market,to%20step%20into%20a%20stake.
+VM1011:32   Link 53:  -> https://support.google.com/websearch?p=ai_overviews&hl=en
+VM1011:32   Link 54: ddkIM rz5jw c30Ztd -> https://finance.yahoo.com/news/6-investing-experts-predict-high-210021290.html#:~:text=Experts%20Are%20Curious%20About%20the,any%20dips%20in%20hardware%20sales.%E2%80%9D
+VM1011:32   Link 55: ddkIM rz5jw c30Ztd -> https://www.marketbeat.com/stocks/NASDAQ/AAPL/forecast/#:~:text=and%20Consensus%20Rating-,Consensus%20Rating,Based%20on%2032%20Analyst%20Ratings
+VM1011:32   Link 56: ddkIM rz5jw c30Ztd -> https://www.tipranks.com/stocks/aapl/forecast#:~:text=High%20$290.00,Lowest$180.00
+VM1011:32   Link 57: ddkIM rz5jw c30Ztd -> https://247wallst.com/forecasts/2025/09/08/apple-inc-aapl-price-prediction-and-forecast-2025-2030/#:~:text=The%20consensus%20recommendation%20of%2045,into%20the%202025%20Christmas%20season.
+VM1011:32   Link 58: ddkIM rz5jw c30Ztd -> https://www.forbes.com/sites/investor-hub/article/apple-aapl-stock-2025-price-prediction/#:~:text=Growth%20Of%20Apple's%20Service%20Segments,are%20now%20so%20widely%20owned.
+VM1011:32   Link 59: ddkIM rz5jw c30Ztd -> https://247wallst.com/forecasts/2025/07/04/apple-inc-aapl-price-prediction-and-forecast-2025-2030/#:~:text=Key%20Drivers%20for%20the%20Stock&text=Free%20software%20update%20Apple%20Intelligence,iCloud%20storage%20for%20AI%20projects.
+VM1011:32   Link 60: ddkIM rz5jw c30Ztd -> https://capital.com/en-int/analysis/apple-stock-price-in-10-years#:~:text=Ongoing%20efforts%20to%20diversify%20production,dampen%20AAPL%20stock%20price%20prospects.
+VM1011:32   Link 61: ddkIM rz5jw c30Ztd -> https://finance.yahoo.com/news/prediction-apple-soar-over-next-144237732.html#:~:text=Then%20again%2C%20perhaps%20the%20market,to%20step%20into%20a%20stake.
+VM1011:32   Link 62: uVhVib -> https://money.usnews.com/investing/articles/apple-aapl-stock-investment-worth-today
+VM1011:32   Link 63: KEVENd -> https://money.usnews.com/investing/articles/apple-aapl-stock-investment-worth-today#:~:text=That%20means%20that%20$10%2C000%20in,$49%2C309%20today%20with%20dividends%20reinvested.
+VM1011:32   Link 64: KEVENd -> https://finance.yahoo.com/news/youd-invested-10-000-apple-124010858.html#:~:text=If%20they%20had%20bought%20$10%2C000,provided%20from%202005%20through%202025.
+VM1011:32   Link 65: KEVENd -> https://www.fool.com/investing/2025/02/23/if-youd-invested-10000-in-apple-stock-30-years-ago/#:~:text=Just%20this%20week%2C%20it%20announced,addition%20to%20an%20individual%20portfolio.
+VM1011:32   Link 66: KEVENd -> https://www.nasdaq.com/articles/if-youd-invested-10000-apple-stock-20-years-ago-heres-how-much-youd-have-today
+VM1011:32   Link 67: KEVENd -> https://www.kiplinger.com/investing/stocks/invested-1000-in-apple-stock-worth-how-much-now#:~:text=The%20bottom%20line%20on%20Apple,$7%2C500%20over%20the%20same%20period.&text=For%20those%20wondering%20if%20Apple,of%20Buy%20with%20solid%20conviction.
+VM1011:32   Link 68:  -> https://support.google.com/websearch?p=ai_overviews&hl=en
+VM1011:32   Link 69: ddkIM rz5jw c30Ztd -> https://money.usnews.com/investing/articles/apple-aapl-stock-investment-worth-today#:~:text=That%20means%20that%20$10%2C000%20in,$49%2C309%20today%20with%20dividends%20reinvested.
+VM1011:32   Link 70: ddkIM rz5jw c30Ztd -> https://finance.yahoo.com/news/youd-invested-10-000-apple-124010858.html#:~:text=If%20they%20had%20bought%20$10%2C000,provided%20from%202005%20through%202025.
+VM1011:32   Link 71: ddkIM rz5jw c30Ztd -> https://www.fool.com/investing/2025/02/23/if-youd-invested-10000-in-apple-stock-30-years-ago/#:~:text=Just%20this%20week%2C%20it%20announced,addition%20to%20an%20individual%20portfolio.
+VM1011:32   Link 72: ddkIM rz5jw c30Ztd -> https://www.nasdaq.com/articles/if-youd-invested-10000-apple-stock-20-years-ago-heres-how-much-youd-have-today
+VM1011:32   Link 73: ddkIM rz5jw c30Ztd -> https://www.kiplinger.com/investing/stocks/invested-1000-in-apple-stock-worth-how-much-now#:~:text=The%20bottom%20line%20on%20Apple,$7%2C500%20over%20the%20same%20period.&text=For%20those%20wondering%20if%20Apple,of%20Buy%20with%20solid%20conviction.
+VM1011:32   Link 74: uVhVib -> https://www.tipranks.com/stocks/aapl/forecast
+VM1011:32   Link 75: uVhVib -> https://www.investing.com/
+VM1011:32   Link 76: uVhVib -> https://www.investing.com/equities/apple-computer-inc-consensus-estimates
+VM1011:32   Link 77: uVhVib -> https://www.marketbeat.com/stocks/NASDAQ/AAPL/forecast/
+VM1011:32   Link 78: uVhVib -> https://www.zacks.com/stock/research/AAPL/price-target-stock-forecast
+VM1011:32   Link 79: KEVENd -> https://www.tipranks.com/stocks/aapl/forecast#:~:text=Apple%20Inc%20has%20a%20consensus,of%2031%20Wall%20Streets%20Analysts.
+VM1011:32   Link 80: KEVENd -> https://www.zacks.com/stock/research/AAPL/price-target-stock-forecast#:~:text=Based%20on%20short%2Dterm%20price,%2C%20while%20Buy%20represented%205.26%25.
+VM1011:32   Link 81: KEVENd -> https://www.marketbeat.com/stocks/NASDAQ/AAPL/forecast/
+VM1011:32   Link 82: KEVENd -> https://stockanalysis.com/stocks/aapl/forecast/
+VM1011:32   Link 83: KEVENd -> https://www.investing.com/equities/apple-computer-inc-consensus-estimates
+VM1011:32   Link 84: KEVENd -> https://www.tipranks.com/stocks/aapl#:~:text=AAPL%20Stock%2012%20Month%20Forecast%20*%20High%20$290.00.%20*%20Average%20$240.63.%20*%20Low%20$180.00.
+VM1011:32   Link 85:  -> https://support.google.com/websearch?p=ai_overviews&hl=en
+VM1011:32   Link 86: ddkIM rz5jw c30Ztd -> https://www.tipranks.com/stocks/aapl/forecast#:~:text=Apple%20Inc%20has%20a%20consensus,of%2031%20Wall%20Streets%20Analysts.
+VM1011:32   Link 87: ddkIM rz5jw c30Ztd -> https://www.zacks.com/stock/research/AAPL/price-target-stock-forecast#:~:text=Based%20on%20short%2Dterm%20price,%2C%20while%20Buy%20represented%205.26%25.
+VM1011:32   Link 88: ddkIM rz5jw c30Ztd -> https://www.marketbeat.com/stocks/NASDAQ/AAPL/forecast/
+VM1011:32   Link 89: ddkIM rz5jw c30Ztd -> https://stockanalysis.com/stocks/aapl/forecast/
+VM1011:32   Link 90: ddkIM rz5jw c30Ztd -> https://www.investing.com/equities/apple-computer-inc-consensus-estimates
+VM1011:32   Link 91: ddkIM rz5jw c30Ztd -> https://www.tipranks.com/stocks/aapl#:~:text=AAPL%20Stock%2012%20Month%20Forecast%20*%20High%20$290.00.%20*%20Average%20$240.63.%20*%20Low%20$180.00.
+VM1011:32   Link 92: zReHs -> https://investor.apple.com/stock-price/default.aspx
+VM1011:32   Link 93: zReHs -> https://www.apple.com/
+VM1011:32   Link 94: zReHs -> https://www.tradingview.com/symbols/NASDAQ-AAPL/
+VM1011:32   Link 95: zReHs -> https://www.cnn.com/markets/stocks/AAPL
+VM1011:32   Link 96: zReHs -> https://seekingalpha.com/symbol/AAPL
+VM1011:32   Link 97: dM1Yyd -> https://seekingalpha.com/symbol/AAPL/earnings
+VM1011:32   Link 98: dM1Yyd -> https://seekingalpha.com/symbol/AAPL/news
+VM1011:32   Link 99: dM1Yyd -> https://seekingalpha.com/symbol/AAPL/dividends/scorecard
+VM1011:32   Link 100: dM1Yyd -> https://seekingalpha.com/symbol/AAPL/press-releases
+VM1011:32   Link 101: zReHs -> https://ycharts.com/companies/AAPL
+VM1011:32   Link 102: dM1Yyd -> https://ycharts.com/companies/AAPL/chart/
+VM1011:32   Link 103: dM1Yyd -> https://ycharts.com/companies/AAPL/key_stats/stats
+VM1011:32   Link 104: dM1Yyd -> https://ycharts.com/companies/AAPL/financials/income_statement/1
+VM1011:32   Link 105: dM1Yyd -> https://ycharts.com/companies/AAPL/pe_ratio
+VM1011:32   Link 106: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Yahoo!+Finance&stick=H4sIAAAAAAAAAOMwVOLSz9U3MCqyNMzJ-8XIsIGF4RULDxeS4CsWbi5OENcwPccyHc5LNq6Kr4QrLSsoMioueMXCz8Wrn65vaJhtbFiel54dD1dgklxuEG-C0G1YXpaEpNzMxDDJoqh8EStfZGJGfr6igltmXmJecuotNkmG3Ys6frK47jfcaGm8cZPY4-3sv9z_1qbNWLmIQywgNb8gJ1UhMac4X6E4NbEoOUMhLb9oBQcjAKmweo_YAAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWEAo
+VM1011:32   Link 107: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=CNBC&stick=H4sIAAAAAAAAAOMwVOLUz9U3MEzPsUz_xciwgYXhFQsPFxdIzKjI0jAn7xULNxdCCZyXbFwVXwlXWlZQZFRc8IqFn4tXP13f0DDb2LA8Lz07Hq7AJLncIN4EoduwvCwJSbmZiWGSRVH5IlYWZz8n51tskgy7F3X8ZHHdb7jR0njjJrHH29l_uf-tTZuxchGHWEBqfkFOqkJiTnG-QnFqYlFyhkJaftEKDkYAh1oKwM0AAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWEA8
+VM1011:32   Link 108: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Google+Finance&stick=H4sIAAAAAAAAAOMwVOLUz9U3SDauiq_8xciwgYXhFQsPFxdIzKjI0jAn7xULNxdYiWF6jmU6nAfWAFdaVlBkVFzwioWfi1c_Xd_QMNvYsDwvPTsersAkudwg3gSh27C8LAlJuZmJYZJFUfkiVj73_Pz0nFQFt8y8xLzk1Ftskgy7F3X8ZHHdb7jR0njjJrHH29l_uf-tTZuxchGHWEBqfgFQcWJOcb5CcWpiUXKGQlp-0QoORgCcDoqJ1wAAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWEBQ
+VM1011:32   Link 109: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Investing.com&stick=H4sIAAAAAAAAAOMwVOLSz9U3KCsoMiou-MXIsIGF4RULDxdY0KjI0jAn7xULNxcniGuYnmOZDuclG1fFV8KVQvS_YuHn4tVP1zc0zDY2LM9Lz46HKzBJLjeIN0HoNiwvS0JSbmZimGRRVL6Ildczryy1uCQzL10vOT_3Fpskw-5FHT9ZXPcbbrQ03rhJ7PF29l_uf2vTZqxcxCEWkJpfkJOqkJhTnK9QnJpYlJyhkJZftIKDEQBy-Xb91wAAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWEBk
+VM1011:32   Link 110: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=TradingView&stick=H4sIAAAAAAAAAOMwVOLVT9c3NMw2NizPS8-O_8XIsIGF4RULDxeXfq6-gVGRpWFO3isWbi5OENcwPccyHc5LNq6Kr4QrLSsoMioueMXCz4VqIlyBSXK5QbwJQrdheVkSknIzE8Mki6LyRazcIUWJKZl56WGZqeW32CQZdi_q-Mniut9wo6Xxxk1ij7ez_3L_W5s2Y-UiDrGA1PyCnFSFxJzifIXi1MSi5AyFtPyiFRyMABSIfg_YAAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWEB4
+VM1011:32   Link 111: qrtwm c30Ztd -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Seeking+Alpha&stick=H4sIAAAAAAAAAOMwVOLSz9U3MEkuN4g3-cXIsIGF4RULDxdY0KjI0jAn7xULNxcniGuYnmOZDuclG1fFV8KVlhUUGRUXvGLh5-LVT9c3NMw2NizPS8-OhyuAWIDQbVheloSk3MzEMMmiqHwRK29wamp2Zl66gmNOQUbiLTZJht2LOn6yuO433GhpvHGT2OPt7L_c_9amzVi5iEMsIDW_ICdVITGnOF-hODWxKDlDIS2_aAUHIwBytu-M1wAAAA&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQs9oBKAB6BAhWECM
+VM1011:32   Link 112: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=AAPL+stock&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAheEAE
+VM1011:32   Link 113: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=AAPL+stock+news+today&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhfEAE
+VM1011:32   Link 114: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=AAPL+news&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhgEAE
+VM1011:32   Link 115: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Apple+share+price+nse+today&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhZEAE
+VM1011:32   Link 116: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=AAPL+stocktwits&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhbEAE
+VM1011:32   Link 117: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=AAPL+Nasdaq&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhaEAE
+VM1011:32   Link 118: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=iPhone+share+price+today&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhcEAE
+VM1011:32   Link 119: ngTNl ggLgoc -> https://www.google.com/search?sca_esv=cdd4458fa27f824d&sxsrf=AE3TifONve2SGrbip-RzICOv_Er_Jc1MAg:1757982192270&q=Google+stock&sa=X&ved=2ahUKEwiX292AgtyPAxVx6ckDHX5IDogQ1QJ6BAhdEAE
+VM1011:35 All headings in this article:
+VM1011:37   H1.bNg8Rb: Main Results
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Apple Inc. (AAPL) Stock Price, News, Quote & Histo
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Apple (AAPL) Stock Price, Quote, News & History
+VM1011:37   H3.LC20lb MBeuO DKV0Md: AAPL - Apple Inc Stock Price and Quote
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Stock Price
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Apple
+VM1011:37   H3.LC20lb MBeuO DKV0Md: NASDAQ:AAPL Stock Price - Apple Inc
+VM1011:37   H3.LC20lb MBeuO DKV0Md: AAPL Stock Quote Price and Forecast
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Apple Inc. (AAPL) Stock Price, Quote, News & Analy
+VM1011:37   H3.LC20lb MBeuO DKV0Md: Apple (AAPL) - Real-Time Price & Historical Perfor
+VM1011:37   H1.bNg8Rb: Ads
+undefined

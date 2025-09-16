@@ -166,6 +166,16 @@ class DailyStrategy {
               display: true,
               text: 'Cumulative P&L ($)'
             },
+            grid: {
+              color: function(context) {
+                const value = context.tick.value;
+                return (value === 0 || value === 1000) ? '#000000' : '#e0e0e0';
+              },
+              lineWidth: function(context) {
+                const value = context.tick.value;
+                return (value === 0 || value === 1000) ? 2 : 1;
+              }
+            },
             ticks: {
               callback: function(value) {
                 const sign = value >= 0 ? '+' : '';

@@ -1,0 +1,30 @@
+{
+  "problematic_sites": {
+    "description": "Sites that are known to be difficult/impossible to scrape due to paywalls, bot detection, or other anti-scraping measures",
+    "domains": [
+      "barrons.com",
+      "wsj.com",
+      "ft.com",
+      "nytimes.com",
+      "washingtonpost.com",
+      "economist.com",
+      "bloomberg.com",
+      "reuters.com"
+    ]
+  },
+  "scraping_alternatives": {
+    "description": "Suggested alternatives when encountering problematic sites",
+    "message": "This site typically requires subscription or has strong anti-bot protection. Consider using the search functionality to find similar content from other sources."
+  },
+  "timeout_settings": {
+    "default_timeout": 10000,
+    "slow_sites": {
+      "description": "Sites that load slowly but are scrapeable",
+      "domains": [
+        "sec.gov",
+        "investors.com"
+      ],
+      "timeout": 15000
+    }
+  }
+}

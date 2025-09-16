@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:scrapeowl.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -332,7 +332,7 @@ app.get('/api/:strategy/chart-data', async (req, res) => {
           FROM daily_positions dp
           LEFT JOIN daily_prices pr ON dp.symbol = pr.symbol AND dp.date = pr.date
           WHERE dp.symbol = 'USDD' 
-            AND (pr.price_close IS NOT NULL OR dp.date < CURRENT_DATE)
+            AND (pr.price_close IS NOT NULL OR dp.date < CURRENT_DATE OR dp.symbol = 'USDD')
           ORDER BY dp.date ASC
         `;
         break;
@@ -534,85 +534,84 @@ app.get("/api/weekly/status", async (_req, res) => {
 app.get("/api/weekly/performance", async (_req, res) => {
   try {
     const q = `
-      SELECT 
+      SELECT
         wp.date,
         wp.symbol,
         wp.shares_bought,
         wp.shares_sold,
-        COALESCE(wp.buy_price, 0) as buy_price,
-        COALESCE(wp.sell_price, 0) as sell_price,
-        COALESCE(pr_buy.price_open, wp.buy_price, 0) as price_open,
-        COALESCE(pr_sell.price_close, wp.sell_price, 0) as price_close
+        COALESCE(pr.price_open, 0) as price_open,
+        COALESCE(pr.price_close, 0) as price_close,
+        (wp.shares_bought - COALESCE(wp.shares_sold, 0)) as net_shares,
+        CASE
+          WHEN wp.symbol = 'USDW' THEN (wp.shares_bought - COALESCE(wp.shares_sold, 0))
+          ELSE (wp.shares_bought - COALESCE(wp.shares_sold, 0)) * COALESCE(pr.price_close, 0)
+        END as current_value
       FROM weekly_positions wp
-      LEFT JOIN daily_prices pr_buy ON wp.symbol = pr_buy.symbol AND wp.date = pr_buy.date
-      LEFT JOIN daily_prices pr_sell ON wp.symbol = pr_sell.symbol AND wp.date = pr_sell.date
+      LEFT JOIN daily_prices pr ON wp.symbol = pr.symbol AND wp.date = pr.date
       WHERE wp.shares_bought > 0 OR wp.shares_sold > 0
       ORDER BY wp.date ASC, wp.symbol ASC
     `;
-    
+
     const { rows } = await pool.query(q);
-    
+
     const portfolioByDate = {};
     const assetData = {};
     const allSymbols = new Set();
-    const assetPnL = {}; // Track cumulative P&L per asset
-    
+
     rows.forEach(row => {
       const dateStr = row.date.toISOString().split('T')[0];
       const symbol = row.symbol;
-      
+      const value = parseFloat(row.current_value) || 0;
+      const netShares = parseFloat(row.net_shares) || 0;
+
       // Track all symbols that have ever been traded
       if (symbol !== 'USDW') {
         allSymbols.add(symbol);
-        
-        if (!assetPnL[symbol]) {
-          assetPnL[symbol] = 0;
+      }
+
+      // Portfolio totals by date (only count positions we currently hold)
+      if (netShares !== 0) {
+        if (!portfolioByDate[dateStr]) {
+          portfolioByDate[dateStr] = { date: dateStr, total: 0 };
         }
-        
-        // Calculate daily P&L for this asset
-        const buyValue = (parseFloat(row.shares_bought) || 0) * (parseFloat(row.buy_price) || 0);
-        const sellValue = (parseFloat(row.shares_sold) || 0) * (parseFloat(row.sell_price) || 0);
-        const dailyPnL = sellValue - buyValue;
-        
-        assetPnL[symbol] += dailyPnL;
-        
+        portfolioByDate[dateStr].total += value;
+      }
+
+      // Individual asset data (include all trading activity)
+      if (symbol !== 'USDW') {
         if (!assetData[symbol]) {
           assetData[symbol] = [];
         }
-        
+
+        // Calculate P&L for this asset transaction
+        const buyValue = (parseFloat(row.shares_bought) || 0) * (parseFloat(row.price_open) || 0);
+        const sellValue = (parseFloat(row.shares_sold) || 0) * (parseFloat(row.price_close) || 0);
+        const dailyPnL = sellValue - buyValue;
+
         assetData[symbol].push({
           date: dateStr,
+          value: value,
+          shares: netShares,
           sharesBought: parseFloat(row.shares_bought) || 0,
           sharesSold: parseFloat(row.shares_sold) || 0,
           buyValue: buyValue,
           sellValue: sellValue,
           dailyPnL: dailyPnL,
-          cumulativePnL: assetPnL[symbol],
-          buyPrice: parseFloat(row.buy_price) || 0,
-          sellPrice: parseFloat(row.sell_price) || 0
+          priceOpen: parseFloat(row.price_open) || 0,
+          priceClose: parseFloat(row.price_close) || 0
         });
       }
     });
-    
-    // Calculate portfolio totals by date
+
+    // Calculate cumulative P&L for each asset
     Object.keys(assetData).forEach(symbol => {
+      let cumulativePnL = 0;
       assetData[symbol].forEach(item => {
-        if (!portfolioByDate[item.date]) {
-          portfolioByDate[item.date] = { date: item.date, total: 0 };
-        }
-        // Add to portfolio total (this will be cumulative P&L across all assets)
-        portfolioByDate[item.date].total += item.dailyPnL;
+        cumulativePnL += item.dailyPnL;
+        item.cumulativePnL = cumulativePnL;
       });
     });
-    
-    // Convert portfolio totals to cumulative
-    const sortedDates = Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date));
-    let cumulativeTotal = 0;
-    sortedDates.forEach(item => {
-      cumulativeTotal += item.total;
-      item.total = cumulativeTotal;
-    });
-    
+
     // Add raw positions and prices data for correct P&L calculation
     const rawPositions = rows.map(row => ({
       symbol: row.symbol,
@@ -624,7 +623,7 @@ app.get("/api/weekly/performance", async (_req, res) => {
     }));
 
     res.json({
-      portfolioTotals: sortedDates,
+      portfolioTotals: Object.values(portfolioByDate).sort((a, b) => a.date.localeCompare(b.date)),
       assetData,
       symbols: Array.from(allSymbols).sort(),
       rawPositions: rawPositions
@@ -643,29 +642,28 @@ app.get("/api/weekly/execution/:date", async (req, res) => {
     weekStart.setDate(inputDate.getDate() - (inputDate.getDay() || 7) + 1);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
-    
+
     const weekStartStr = weekStart.toISOString().split('T')[0];
     const weekEndStr = weekEnd.toISOString().split('T')[0];
-    
+
     const q = `
-      SELECT 
+      SELECT
         wp.symbol,
         wp.date,
         wp.shares_bought,
         wp.shares_sold,
-        wp.buy_price,
-        wp.sell_price,
-        wp.conviction_at_buy,
-        wp.conviction_at_sell,
+        COALESCE(pr.price_open, 0) as buy_price,
+        COALESCE(pr.price_close, 0) as sell_price,
         wp.created_at,
         wp.updated_at
       FROM weekly_positions wp
+      LEFT JOIN daily_prices pr ON wp.symbol = pr.symbol AND wp.date = pr.date
       WHERE wp.date >= $1 AND wp.date <= $2
       ORDER BY wp.date ASC, wp.created_at ASC, wp.symbol ASC
     `;
-    
+
     const { rows } = await pool.query(q, [weekStartStr, weekEndStr]);
-    
+
     const executions = rows.map(row => ({
       symbol: row.symbol,
       date: row.date.toISOString().split('T')[0],
@@ -673,17 +671,15 @@ app.get("/api/weekly/execution/:date", async (req, res) => {
       sharesSold: parseFloat(row.shares_sold) || 0,
       buyPrice: parseFloat(row.buy_price) || 0,
       sellPrice: parseFloat(row.sell_price) || 0,
-      convictionAtBuy: parseFloat(row.conviction_at_buy) || null,
-      convictionAtSell: parseFloat(row.conviction_at_sell) || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       buyValue: (parseFloat(row.shares_bought) || 0) * (parseFloat(row.buy_price) || 0),
       sellValue: (parseFloat(row.shares_sold) || 0) * (parseFloat(row.sell_price) || 0)
     }));
-    
+
     const totalBuyValue = executions.reduce((sum, ex) => sum + ex.buyValue, 0);
     const totalSellValue = executions.reduce((sum, ex) => sum + ex.sellValue, 0);
-    
+
     res.json({
       weekStart: weekStartStr,
       weekEnd: weekEndStr,
@@ -705,24 +701,26 @@ app.get("/api/weekly/execution/:date", async (req, res) => {
 app.get("/api/weekly/assets", async (_req, res) => {
   try {
     const q = `
-      SELECT 
+      SELECT
         wp.symbol,
         SUM(wp.shares_bought) as total_shares_bought,
         SUM(wp.shares_sold) as total_shares_sold,
-        SUM(wp.shares_bought * COALESCE(wp.buy_price, 0)) as total_buy_value,
-        SUM(wp.shares_sold * COALESCE(wp.sell_price, 0)) as total_sell_value,
+        SUM(wp.shares_bought * COALESCE(pr_buy.price_open, 0)) as total_buy_value,
+        SUM(wp.shares_sold * COALESCE(pr_sell.price_close, 0)) as total_sell_value,
         COUNT(DISTINCT wp.date) as trading_days,
         MIN(wp.date) as first_trade_date,
         MAX(wp.date) as last_trade_date,
         (SUM(wp.shares_bought) - SUM(wp.shares_sold)) as current_position
       FROM weekly_positions wp
+      LEFT JOIN daily_prices pr_buy ON wp.symbol = pr_buy.symbol AND wp.date = pr_buy.date
+      LEFT JOIN daily_prices pr_sell ON wp.symbol = pr_sell.symbol AND wp.date = pr_sell.date
       WHERE wp.symbol != 'USDW'
       GROUP BY wp.symbol
       ORDER BY wp.symbol
     `;
-    
+
     const { rows } = await pool.query(q);
-    
+
     const assets = rows.map(row => ({
       symbol: row.symbol,
       totalSharesBought: parseFloat(row.total_shares_bought) || 0,
@@ -736,7 +734,7 @@ app.get("/api/weekly/assets", async (_req, res) => {
       currentPosition: parseFloat(row.current_position) || 0,
       isCurrentlyHeld: (parseFloat(row.current_position) || 0) > 0
     }));
-    
+
     const summary = {
       totalAssets: assets.length,
       currentlyHeld: assets.filter(a => a.isCurrentlyHeld).length,
@@ -744,7 +742,7 @@ app.get("/api/weekly/assets", async (_req, res) => {
       totalSellValue: assets.reduce((sum, a) => sum + a.totalSellValue, 0),
       totalNetPnL: assets.reduce((sum, a) => sum + a.netPnL, 0)
     };
-    
+
     res.json({
       assets,
       summary

@@ -2,7 +2,7 @@
 
 ## Summary
 
-The Python Yahoo Finance API service is a Flask-based web service that provides real-time and historical market data for financial instruments. It acts as a lightweight wrapper around the yfinance Python library, offering RESTful endpoints for retrieving market capitalization, stock prices, and comprehensive financial information for ticker symbols. The service is designed to integrate seamlessly with the Janus n8n workflow ecosystem, providing essential market data for automated financial analysis and portfolio management operations.
+The Python Yahoo Finance API service is a Flask-based web service that provides real-time and historical market data for financial instruments. It acts as a lightweight wrapper around the yfinance Python library, offering RESTful endpoints for retrieving market capitalization, stock prices, comprehensive financial information, daily pricing data, and historical price analysis for ticker symbols. The service is designed to integrate seamlessly with the Janus n8n workflow ecosystem, providing essential market data for automated financial analysis and portfolio management operations.
 
 ## Docker Configuration
 
@@ -82,11 +82,12 @@ The Python Yahoo Finance API service is a Flask-based web service that provides 
 **Purpose**: Retrieve specific price information for a single ticker symbol
 - **Parameters**:
   - `ticker` (required) - Single stock ticker symbol
-  - `type` (optional) - Price type: `close`, `current`, or `open` (default: `close`)
+  - `type` (optional) - Price type: `close`, `current`, `open`, or `1hr_after_open` (default: `close`)
 - **Price Types**:
   - `current`: Real-time current price from ticker info
   - `close`: Latest closing price from historical data
   - `open`: Latest opening price from historical data
+  - `1hr_after_open`: Price approximately 1 hour after market open (uses intraday data when available)
 - **Response**:
   ```json
   {
@@ -95,23 +96,86 @@ The Python Yahoo Finance API service is a Flask-based web service that provides 
     "price": 175.84
   }
   ```
-- **Data Source**: Uses 5-day historical data for close/open prices
+- **Data Source**: Uses 5-day historical data for close/open prices, 1-hour intervals for 1hr_after_open
 - **Use Case**: Precise price tracking for portfolio valuation and trading decisions
+
+### GET /daily-prices
+**Purpose**: Retrieve both opening and closing prices for multiple tickers in a single call
+- **Parameters**:
+  - `symbols` (required) - Comma-separated list of stock ticker symbols
+- **Processing**:
+  - Gets today's opening price from historical data
+  - Gets current/closing price from ticker info or latest historical close
+  - Uses 2-day historical data to ensure current data availability
+- **Response**:
+  ```json
+  {
+    "AAPL": {
+      "open": 172.50,
+      "close": 175.84
+    },
+    "MSFT": {
+      "open": 350.20,
+      "close": 353.75
+    }
+  }
+  ```
+- **Use Case**: Daily performance tracking, gap analysis, and bulk price monitoring
+
+### GET /historical-prices
+**Purpose**: Retrieve comprehensive historical price data for multiple tickers for a specific date
+- **Parameters**:
+  - `symbols` (required) - Comma-separated list of stock ticker symbols
+  - `date` (required) - Target date in YYYY-MM-DD format
+- **Processing**:
+  - Validates date format (YYYY-MM-DD)
+  - Searches for exact date or closest available trading day
+  - Attempts to calculate 1-hour after open price using multiple intervals (5m, 15m, 30m, 1h)
+  - Falls back to closest trading day if target date is weekend/holiday
+- **Response**:
+  ```json
+  {
+    "AAPL": {
+      "date": "2024-01-15",
+      "actual_date": "2024-01-15",
+      "open": 172.50,
+      "close": 175.84,
+      "high": 177.20,
+      "low": 171.80,
+      "volume": 45000000,
+      "one_hr_after_open": 173.25
+    }
+  }
+  ```
+- **Response Fields**:
+  - `date`: Requested date
+  - `actual_date`: Actual trading date used (may differ for weekends/holidays)
+  - `open`: Opening price
+  - `close`: Closing price
+  - `high`: Highest price of the day
+  - `low`: Lowest price of the day
+  - `volume`: Trading volume (null if unavailable)
+  - `one_hr_after_open`: Price approximately 1 hour after market open (null if unavailable)
+- **Use Case**: Historical analysis, backtesting, performance attribution, and detailed price movement studies
 
 ## Error Handling
 
 ### Common Error Responses
-- **400 Bad Request**: Missing required parameters or invalid price type
+- **400 Bad Request**: Missing required parameters, invalid price type, or invalid date format
   ```json
   {"error": "Missing symbols param"}
+  {"error": "Invalid type. Must be one of: close, current, open, 1hr_after_open"}
+  {"error": "Invalid date format. Use YYYY-MM-DD"}
   ```
 - **404 Not Found**: No data available for requested ticker
   ```json
   {"error": "Current price not available"}
+  {"error": "No historical data available"}
   ```
 - **500 Internal Server Error**: Yahoo Finance API failures or network issues
   ```json
   {"error": "Failed to fetch data: [detailed error message]"}
+  {"error": "Failed to fetch historical data: [detailed error message]"}
   ```
 
 ## Usage
@@ -157,6 +221,26 @@ curl "http://localhost:5000/price?ticker=AAPL&type=current"
 curl "http://localhost:5000/price?ticker=AAPL&type=close"
 ```
 
+#### Get Price 1 Hour After Market Open
+```bash
+curl "http://localhost:5000/price?ticker=AAPL&type=1hr_after_open"
+```
+
+#### Get Daily Open and Close Prices for Multiple Stocks
+```bash
+curl "http://localhost:5000/daily-prices?symbols=AAPL,MSFT,TSLA"
+```
+
+#### Get Historical Prices for a Specific Date
+```bash
+curl "http://localhost:5000/historical-prices?symbols=AAPL,MSFT&date=2024-01-15"
+```
+
+#### Get Historical Prices for Multiple Stocks and Dates
+```bash
+curl "http://localhost:5000/historical-prices?symbols=AAPL,GOOGL,TSLA&date=2024-12-20"
+```
+
 ## Data Processing Features
 
 ### Symbol Normalization
@@ -168,8 +252,11 @@ curl "http://localhost:5000/price?ticker=AAPL&type=close"
 ### Flexible Data Retrieval
 - Default field sets for common use cases
 - Custom field selection for targeted queries
-- Multiple price types for different analysis needs
-- Bulk processing capabilities
+- Multiple price types for different analysis needs (current, close, open, 1hr_after_open)
+- Bulk processing capabilities for multiple tickers
+- Historical data with automatic trading day detection
+- Comprehensive OHLCV data with volume information
+- Advanced intraday price analysis (1 hour after market open)
 
 ## Integration Points
 
@@ -195,5 +282,21 @@ This service serves as a crucial data provider within the Janus financial analys
 4. **Performance Optimization**: Lightweight Flask service with minimal overhead for high-frequency data requests
 5. **Error Resilience**: Robust error handling prevents workflow failures due to data unavailability
 6. **Flexible Querying**: Supports both bulk operations and targeted data retrieval based on specific analysis needs
+7. **Historical Analysis**: Comprehensive historical data retrieval for backtesting and performance attribution
+8. **Intraday Precision**: Advanced timing analysis including 1-hour after market open pricing for gap analysis
 
 The application bridges the gap between external market data sources and internal financial analysis workflows, providing the essential market data foundation that powers the broader Janus research and portfolio management platform.
+
+## Complete API Reference Summary
+
+The application provides 5 external API endpoints for market data retrieval:
+
+| Endpoint | Purpose | Parameters | Response Type |
+|----------|---------|------------|---------------|
+| **GET /marketcap** | Market capitalization data | `symbols` (required) | Object with symbol->marketCap mapping |
+| **GET /info** | Comprehensive financial info | `symbols` (required), `fields` (optional) | Object with symbol->financial data mapping |
+| **GET /price** | Single ticker price data | `ticker` (required), `type` (optional: close/current/open/1hr_after_open) | Object with ticker, type, and price |
+| **GET /daily-prices** | Daily open/close for multiple tickers | `symbols` (required) | Object with symbol->open/close mapping |
+| **GET /historical-prices** | Historical OHLCV data for specific date | `symbols` (required), `date` (required: YYYY-MM-DD) | Object with comprehensive historical data including one_hr_after_open |
+
+All endpoints return JSON responses and include comprehensive error handling for invalid parameters, missing data, and API failures.

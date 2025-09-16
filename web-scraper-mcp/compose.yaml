@@ -1,0 +1,29 @@
+services:
+  web-scraper:
+    build: .
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=production
+      - DISPLAY=:99
+      - SCRAPOWL_API_KEY=${SCRAPOWL_API_KEY}
+    volumes:
+      - /dev/shm:/dev/shm
+    restart: unless-stopped
+    networks:
+      - n8n-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+networks:
+  n8n-net:
+    external: true
