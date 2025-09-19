@@ -106,3 +106,8 @@ The system expects the following PostgreSQL tables:
 4. Launch the Node.js Research Console for portfolio monitoring
 
 Each component directory contains detailed setup and configuration documentation in its respective `.md` file.
+
+## External Dependencies
+This is dependent upon an n8n implementation existing on the n8n-net network
+This is dependent upon a .env file being provided to the n8n implementation with the SCRAPEOWL_API_KEY defined
+This is dependent upon a postgres instance being avaiable on the n8n-net network

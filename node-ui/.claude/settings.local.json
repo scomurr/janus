@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//d/projects/janus/**)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}

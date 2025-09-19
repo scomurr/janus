@@ -338,13 +338,13 @@ app.get('/api/:strategy/chart-data', async (req, res) => {
         break;
       case 'weekly':
         query = `
-          SELECT 
+          SELECT
             to_char(wp.date, 'YYYY-MM-DD') AS date,
             wp.shares_bought::float AS value
           FROM weekly_positions wp
           LEFT JOIN daily_prices pr ON wp.symbol = pr.symbol AND wp.date = pr.date
-          WHERE wp.symbol = 'USDW' 
-            AND (pr.price_close IS NOT NULL OR wp.date < CURRENT_DATE)
+          WHERE wp.symbol = 'USDW'
+            AND (pr.price_close IS NOT NULL OR wp.date < CURRENT_DATE OR wp.symbol = 'USDW')
           ORDER BY wp.date ASC
         `;
         break;
