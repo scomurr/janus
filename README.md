@@ -2,13 +2,16 @@
 
 Janus is a comprehensive financial analysis platform designed for systematic micro-cap equity research and portfolio management. The system combines automated data collection, AI-powered stock analysis, and real-time portfolio tracking to identify and manage micro-cap investment opportunities.
 
+## Inspired By ##
+https://github.com/LuckyOne7777/ChatGPT-Micro-Cap-Experiment
+
 ## Use Case
 
 Janus is designed for systematic micro-cap equity research where traditional analysis tools are insufficient due to limited coverage and data availability. The platform automates the entire research pipeline from initial discovery through final investment decisions, making it possible to efficiently analyze thousands of micro-cap opportunities that would be impractical to research manually.
 
 ## Ticker Selection Criteria
 
-The system applies rigorous filtering criteria to identify investable micro-cap opportunities:
+The system applies filtering criteria to identify investable micro-cap opportunities:
 
 ### Market Cap & Size Requirements
 - **Small-cap stocks only**: Market cap under $300 million
@@ -45,6 +48,7 @@ The system evaluates stocks across multiple dimensions using a structured analyt
 - **OpenAI GPT-4**: Advanced reasoning and financial analysis
 - **Google Gemini**: Parallel analysis for consensus building
 - **Local LLM (Ollama)**: Independent validation and cost-effective processing
+- **ChatGPT 5/4**: Weekend iniital conviction scoring
 
 ## System Overview
 
