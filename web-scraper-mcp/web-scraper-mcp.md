@@ -1,5 +1,9 @@
 # Web Scraper MCP Documentation
 
+** Parked for Now **
+With finance data, its well gaurded with captchas.
+Will circle back and crush all the captchas but the effort is not currently worth it
+
 A Model Context Protocol (MCP) server that provides web scraping capabilities using ScrapOwl API (with DuckDuckGo search) and Playwright. This server can search for stock news, scrape specific URLs, and perform general web searches with content extraction and optional date filtering.
 
 ## Features
