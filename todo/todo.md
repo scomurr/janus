@@ -1,7 +1,7 @@
  - Initial conviction scoring needs to be automated
+ - MCP server wired in front of playwright should be fixed - can be an additional mechnism for news
 
-
- Long Term
+ Long Term (productionize)
   - Cron schedules via the scheduler node do not queue. If n8n cannot execute at the scheduled time, the job simply does not run
     - ToDo: external monitoring
   - Heartbeat monitoring: all of the necessary services need a heartbeat monitor (internal and external)
@@ -11,3 +11,5 @@
         - ScrapeOwl
         - Yahoo Finance
         - Finnhub
+  - Implement live trading
+    - Only after high availability is implmented
