@@ -50,7 +50,7 @@ class DailyStrategy {
   async render() {
     await this.renderChart(this.allData.performance);
     await this.renderStatus(this.allData.status);
-    this.renderAssetDropdown(this.allData.assets);
+    await this.renderAssetDropdown(this.allData.assets);
     this.updateLastUpdated();
   }
 
@@ -408,7 +408,7 @@ class DailyStrategy {
     return assetDailyPnL;
   }
 
-  renderAssetDropdown(data) {
+  async renderAssetDropdown(data) {
     // Use corrected asset performance data instead of assets endpoint data
     const assetPerfData = this.getAssetPerformanceForTable();
     if (!assetPerfData || assetPerfData.length === 0) return;
@@ -433,21 +433,21 @@ class DailyStrategy {
       }
     }
     
-    // Calculate total P&L and trading period from corrected data
-    const totalPnL = assetPerfData.reduce((sum, asset) => sum + asset.cumulativePnL, 0);
+    // Calculate current week's P&L progress from corrected data
+    const weekPnL = await this.calculateCurrentWeekPnL();
     const allDates = this.allData.performance.rawPositions
       .filter(p => p.shares_sold > 0)
       .map(p => p.date)
       .sort();
     const firstTradeDate = allDates.length > 0 ? allDates[0] : '';
     const lastTradeDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
-    
+
     assetDropdownContainer.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h4 style="margin: 0; font-size: 14px; color: #555;">Asset Performance</h4>
         <div style="font-size: 12px; color: #666;">
-          Total P&L: <span style="color: ${totalPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
-            ${totalPnL >= 0 ? '+' : ''}$${totalPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          Week's P&L: <span style="color: ${weekPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
+            ${weekPnL >= 0 ? '+' : ''}$${weekPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
         </div>
       </div>
@@ -530,6 +530,43 @@ class DailyStrategy {
         </div>
       </div>
     `;
+  }
+
+  async calculateCurrentWeekPnL() {
+    if (!this.allData.performance || !this.allData.performance.rawPositions) {
+      return 0;
+    }
+
+    try {
+      // For daily strategy: Week's P&L = currentClose - previousWeekClose
+      const usdData = await this.getUSDDPositions();
+      if (!usdData || usdData.length < 2) return 0;
+
+      // Get current date and find the start of this week (Monday)
+      const today = new Date();
+      const dayOfWeek = today.getDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - daysToMonday);
+      const weekStartStr = weekStart.toISOString().split('T')[0];
+
+      // Current close = most recent USDD value
+      const currentClose = usdData[usdData.length - 1].total;
+
+      // Previous week close = last USDD value before this week started
+      let previousWeekClose = 1000; // Default starting value if no previous data
+      for (let i = usdData.length - 1; i >= 0; i--) {
+        if (usdData[i].date < weekStartStr) {
+          previousWeekClose = usdData[i].total;
+          break;
+        }
+      }
+
+      return currentClose - previousWeekClose;
+    } catch (error) {
+      console.error('Error calculating week P&L:', error);
+      return 0;
+    }
   }
 
   getLatestPrice(symbol) {

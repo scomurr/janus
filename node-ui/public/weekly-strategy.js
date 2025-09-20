@@ -50,7 +50,7 @@ class WeeklyStrategy {
   async render() {
     await this.renderChart(this.allData.performance);
     await this.renderStatus(this.allData.status);
-    this.renderAssetDropdown(this.allData.assets);
+    await this.renderAssetDropdown(this.allData.assets);
     this.updateLastUpdated();
   }
 
@@ -414,7 +414,7 @@ class WeeklyStrategy {
     return results.sort((a, b) => b.cumulativePnL - a.cumulativePnL); // Sort by P&L descending
   }
 
-  renderAssetDropdown(data) {
+  async renderAssetDropdown(data) {
     // Use corrected asset performance data instead of assets endpoint data
     const assetPerfData = this.getAssetPerformanceForTable();
     if (!assetPerfData || assetPerfData.length === 0) return;
@@ -439,21 +439,21 @@ class WeeklyStrategy {
       }
     }
     
-    // Calculate total P&L and trading period from corrected data
-    const totalPnL = assetPerfData.reduce((sum, asset) => sum + asset.cumulativePnL, 0);
+    // Calculate current/last week's P&L from corrected data
+    const weekPnL = await this.calculateCurrentWeekPnL();
     const allDates = this.allData.performance.rawPositions
       .filter(p => p.shares_sold > 0)
       .map(p => p.date)
       .sort();
     const firstTradeDate = allDates.length > 0 ? allDates[0] : '';
     const lastTradeDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
-    
+
     assetDropdownContainer.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h4 style="margin: 0; font-size: 14px; color: #555;">Weekly Asset Performance</h4>
         <div style="font-size: 12px; color: #666;">
-          Total P&L: <span style="color: ${totalPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
-            ${totalPnL >= 0 ? '+' : ''}$${totalPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          Week's P&L: <span style="color: ${weekPnL >= 0 ? '#2e7d32' : '#d32f2f'}; font-weight: 600;">
+            ${weekPnL >= 0 ? '+' : ''}$${weekPnL.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </span>
         </div>
       </div>
@@ -534,6 +534,34 @@ class WeeklyStrategy {
         </div>
       </div>
     `;
+  }
+
+  async calculateCurrentWeekPnL() {
+    if (!this.allData.performance || !this.allData.performance.rawPositions) {
+      return 0;
+    }
+
+    try {
+      // For weekly strategy: Week's P&L = Current Friday Close - Previous Friday Close
+      // Friday close = USDW record with shares_bought > 0 and shares_sold = 0 (cash from stock sales)
+      const rawPositions = this.allData.performance.rawPositions;
+
+      // Filter for USDW Friday closes (shares_bought > 0, shares_sold = 0)
+      const fridayCloses = rawPositions
+        .filter(pos => pos.symbol === 'USDW' && pos.shares_bought > 0 && pos.shares_sold === 0)
+        .sort((a, b) => a.date.localeCompare(b.date)); // Sort by date ascending
+
+      if (fridayCloses.length < 2) return 0;
+
+      // Get the two most recent Friday closes
+      const currentFridayClose = fridayCloses[fridayCloses.length - 1].shares_bought; // 1050.329461
+      const previousFridayClose = fridayCloses[fridayCloses.length - 2].shares_bought; // 1014.760149
+
+      return currentFridayClose - previousFridayClose; // Should give +35.57
+    } catch (error) {
+      console.error('Error calculating weekly P&L:', error);
+      return 0;
+    }
   }
 
   getLatestPrice(symbol) {

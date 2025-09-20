@@ -6,6 +6,7 @@ services:
     container_name: marketcap-api
     ports:
       - "5000:5000"
+    restart: always
     networks:
       - n8n-net
 
