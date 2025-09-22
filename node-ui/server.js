@@ -24,14 +24,15 @@ const pool = new Pool({
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
-// 1) List tickers with multiple Buy recommendations
-//    select symbol, count(*) as count from ticker_scores where recommendation='Buy' group by symbol having count(*) > 1 order by count desc;
+// 1) List tickers with multiple Buy recommendations from the past 2 days
+//    select symbol, count(*) as count from ticker_scores where recommendation='Buy' and created_at >= NOW() - INTERVAL '2 days' group by symbol having count(*) > 1 order by count desc;
 app.get("/api/buys", async (_req, res) => {
   try {
     const q = `
       select symbol, count(*)::int as count
       from ticker_scores
       where recommendation = 'Buy'
+        and time_added >= CURRENT_DATE - INTERVAL '2 days'
       group by symbol
       having count(*) > 1
       order by count desc;
