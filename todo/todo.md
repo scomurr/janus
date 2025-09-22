@@ -13,4 +13,4 @@
         - Yahoo Finance
         - Finnhub
   - Implement live trading
-    - Only after high availability is implmented
+    - Only after high availability is implemented
