@@ -1,6 +1,7 @@
 const tbody = document.querySelector("#tickers tbody");
 const statusEl = document.getElementById("status");
 const refreshBtn = document.getElementById("refresh");
+const analyzeAllBtn = document.getElementById("analyzeAll");
 const promptTA = document.getElementById("prompt");
 const symTitle = document.getElementById("symTitle");
 const meta = document.getElementById("meta");
@@ -33,6 +34,33 @@ function renderTable(rows) {
     tr.addEventListener("click", () => loadPrompt(r.symbol));
     tbody.appendChild(tr);
   });
+}
+
+async function loadAllSymbolsPrompt() {
+  symTitle.textContent = "All Symbols Analysis";
+  meta.textContent = "Loading...";
+  promptTA.value = "";
+  copyBtn.disabled = true;
+
+  try {
+    const resp = await fetch("/api/all-symbols/prompt");
+    if (!resp.ok) {
+      meta.textContent = "Error loading combined prompt";
+      return;
+    }
+    const { symbols, prompt } = await resp.json();
+    promptTA.value = prompt;
+    copyBtn.disabled = false;
+
+    if (symbols.length === 0) {
+      meta.textContent = "No symbols with multiple Buy recommendations found";
+    } else {
+      meta.textContent = `Combined analysis for ${symbols.length} symbols`;
+    }
+  } catch (e) {
+    console.error(e);
+    meta.textContent = "Error";
+  }
 }
 
 async function loadPrompt(symbol) {
@@ -105,4 +133,5 @@ copyableText.addEventListener("click", async () => {
 });
 
 refreshBtn.addEventListener("click", fetchBuys);
+analyzeAllBtn.addEventListener("click", loadAllSymbolsPrompt);
 fetchBuys();

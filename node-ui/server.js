@@ -24,15 +24,20 @@ const pool = new Pool({
 app.use(express.static(path.join(__dirname, "public")));
 app.use(express.json());
 
-// 1) List tickers with multiple Buy recommendations from the past 2 days
-//    select symbol, count(*) as count from ticker_scores where recommendation='Buy' and created_at >= NOW() - INTERVAL '2 days' group by symbol having count(*) > 1 order by count desc;
+// 1) List tickers with multiple Buy recommendations from the latest date in ticker_scores
 app.get("/api/buys", async (_req, res) => {
   try {
     const q = `
       select symbol, count(*)::int as count
       from ticker_scores
       where recommendation = 'Buy'
-        and time_added >= CURRENT_DATE - INTERVAL '2 days'
+        and date = (
+          select date
+          from ticker_scores
+          where date is not null
+          order by date desc
+          limit 1
+        )
       group by symbol
       having count(*) > 1
       order by count desc;
@@ -159,6 +164,123 @@ app.get("/api/ticker/:symbol/prompt", async (req, res) => {
     });
   } catch (err) {
     console.error("GET /api/ticker/:symbol/prompt error:", err);
+    res.status(500).json({ error: "query_failed" });
+  }
+});
+
+// 3) Get combined prompt for all symbols with multiple Buy recommendations
+app.get("/api/all-symbols/prompt", async (_req, res) => {
+  try {
+    // First get all symbols with multiple Buy recommendations
+    const symbolsQuery = `
+      select symbol, count(*)::int as count
+      from ticker_scores
+      where recommendation = 'Buy'
+        and date = (
+          select date
+          from ticker_scores
+          where date is not null
+          order by date desc
+          limit 1
+        )
+      group by symbol
+      having count(*) > 1
+      order by count desc;
+    `;
+
+    const { rows: symbols } = await pool.query(symbolsQuery);
+
+    if (!symbols.length) {
+      return res.json({ symbols: [], prompt: "No symbols found with multiple Buy recommendations." });
+    }
+
+    // Get metrics for all symbols
+    const symbolList = symbols.map(s => s.symbol);
+    const metricsQuery = `
+      select
+        symbol,
+        market_cap,
+        volume,
+        trailing_pe,
+        fifty_two_week_high,
+        fifty_two_week_low,
+        dividend_yield,
+        total_revenue,
+        gross_margins
+      from ticker_universe
+      where symbol = ANY($1)
+      order by symbol;
+    `;
+
+    const { rows: metrics } = await pool.query(metricsQuery, [symbolList]);
+
+    // Create metrics lookup
+    const metricsMap = {};
+    metrics.forEach(m => {
+      metricsMap[m.symbol] = m;
+    });
+
+    // Helper functions
+    const fmtNum = (x) => (x === null || x === undefined ? "unknown" : String(x));
+
+    // Build combined prompt
+    const basePrompt = [
+      "Act as a professional-grade micro-cap equity analyst. Your only goal is to generate alpha over the next 1–6 months. Use only public, verifiable data. Be concise, skeptical, and prioritize actionable insights over vague narratives.",
+      "",
+      "You are evaluating multiple stocks for immediate inclusion or removal from a $100 micro-cap portfolio composed of full-share positions only. For each stock, your decision must be either [Buy] or [Sell] — no 'hold' or 'research further'.",
+      "",
+      "Decision Criteria:",
+      "- Recommend [Buy] only if:",
+      "  - There is a clear and time-relevant alpha thesis (1–6 months), and",
+      "  - There are no thesis-breaking risks (e.g., near-certain dilution, insolvency, fraud).",
+      "- Recommend [Sell] if:",
+      "  - The upside is low or speculative, or",
+      "  - There are material concerns about liquidity, governance, dilution, or solvency.",
+      "",
+      "Required Considerations:",
+      "- Liquidity & Tradability: Avg daily $ volume, float %, spread.",
+      "- Dilution Risk: Recent or pending offerings, ATM usage, warrants, convertibles, S-3 shelf.",
+      "- Solvency: Cash vs. burn, debt maturity, going-concern risk.",
+      "- Governance & Compliance: Insider control, related-party risk, listing status, audit flags.",
+      "- Catalysts: Must reasonably occur within the next 6 months and be significant (earnings, contracts, legal wins, regulatory approvals, launches, etc.).",
+      "",
+      "For each ticker below, provide:",
+      "1. Key Financials & Business Model (brief)",
+      "2. Price & Volume Behavior (brief)",
+      "3. Top 2 Risks",
+      "4. Top 2 Catalysts (within 6 months)",
+      "5. Alpha Thesis (1-2 sentences)",
+      "6. Final Recommendation: [Buy] or [Sell] with 2 strongest reasons",
+      "",
+      "Analyze these tickers:"
+    ].join("\n");
+
+    const tickerSections = symbols.map(symbolRow => {
+      const symbol = symbolRow.symbol;
+      const count = symbolRow.count;
+      const m = metricsMap[symbol] || {};
+
+      return [
+        `\n--- ${symbol} (${count} Buy recommendations) ---`,
+        `Market Cap: ${fmtNum(m.market_cap)}`,
+        `Revenue: ${fmtNum(m.total_revenue)}`,
+        `Gross Margins: ${fmtNum(m.gross_margins)}`,
+        `Trailing P/E: ${fmtNum(m.trailing_pe)}`,
+        `Dividend Yield: ${fmtNum(m.dividend_yield)}`,
+        `52W High/Low: ${fmtNum(m.fifty_two_week_high)}/${fmtNum(m.fifty_two_week_low)}`,
+        `Avg Volume: ${fmtNum(m.volume)}`
+      ].join("\n");
+    });
+
+    const fullPrompt = basePrompt + "\n" + tickerSections.join("\n\n");
+
+    res.json({
+      symbols: symbols,
+      prompt: fullPrompt
+    });
+
+  } catch (err) {
+    console.error("GET /api/all-symbols/prompt error:", err);
     res.status(500).json({ error: "query_failed" });
   }
 });
