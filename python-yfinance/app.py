@@ -314,5 +314,75 @@ def historical_prices():
     
     return jsonify(result)
 
+@app.route("/direct-fields")
+def direct_fields():
+    """Get direct fields: close, volume, dollar_vol for single ticker with historical data"""
+    ticker = request.args.get("ticker")
+    asof = request.args.get("asof")
+    lookback_days = request.args.get("lookback_days", "150")
+
+    if not ticker:
+        return jsonify({"error": "Missing ticker param"}), 400
+    if not asof:
+        return jsonify({"error": "Missing asof param (format: YYYY-MM-DD)"}), 400
+
+    # Validate date format
+    try:
+        from datetime import datetime, timedelta
+        asof_date = datetime.strptime(asof, '%Y-%m-%d')
+        lookback_days_int = int(lookback_days)
+    except ValueError as e:
+        return jsonify({"error": f"Invalid date format or lookback_days: {str(e)}"}), 400
+
+    try:
+        stock = yf.Ticker(ticker.upper())
+
+        # Calculate start date for historical data
+        # lookback_days is calendar days, not trading days
+        start_date = asof_date - timedelta(days=lookback_days_int)
+        end_date = asof_date + timedelta(days=1)  # Include asof date
+
+        # Get historical data with auto_adjust=False to get raw close prices
+        hist = stock.history(
+            start=start_date.strftime('%Y-%m-%d'),
+            end=end_date.strftime('%Y-%m-%d'),
+            auto_adjust=False
+        )
+
+        if hist.empty:
+            return jsonify({"error": "No historical data available"}), 404
+
+        # Filter data up to and including asof date
+        hist = hist[hist.index.date <= asof_date.date()]
+
+        # Return all trading days within the calendar lookback period
+        hist_limited = hist
+
+        result = {
+            "ticker": ticker.upper(),
+            "asof": asof,
+            "requested_lookback_days": lookback_days_int,
+            "actual_days_returned": len(hist_limited),
+            "data": []
+        }
+
+        # Process each day's data
+        for date, row in hist_limited.iterrows():
+            close_price = float(row['Close'])
+            volume = int(row['Volume']) if row['Volume'] is not None else None
+            dollar_vol = close_price * volume if volume is not None else None
+
+            result["data"].append({
+                "date": date.strftime('%Y-%m-%d'),
+                "close": close_price,
+                "volume": volume,
+                "dollar_vol": dollar_vol
+            })
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch direct fields data: {str(e)}"}), 500
+
+    return jsonify(result)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
